@@ -5,7 +5,7 @@ import {
 	type MermaidOneInAllSettings,
 } from "./settings";
 import { initMermaidObserver } from "./post-processor";
-import { cloneSvgWithStyles, serializeSvg, setViewBox } from "./utils/svg-utils";
+import { cloneSvgWithStyles, serializeSvg } from "./utils/svg-utils";
 import { copyPngToClipboard, copyTextToClipboard, svgToBase64DataUrl } from "./utils/clipboard-utils";
 import { MermaidLightboxModal } from "./modules/lightbox";
 import { exportPdf } from "./modules/export/pdf-export";
@@ -98,41 +98,25 @@ export default class MermaidOneInAllPlugin extends Plugin {
 		try {
 			const scale = this.settings.pngScale;
 
-			// Use getBBox() on the live SVG to get the true bounding box of all
-			// rendered content — viewBox can be smaller than actual content.
-			const bbox = svg.getBBox();
-			const padding = 10;
-			const exportVB = {
-				x: bbox.x - padding,
-				y: bbox.y - padding,
-				width: bbox.width + padding * 2,
-				height: bbox.height + padding * 2,
-			};
+			// Read the original viewBox — Mermaid sets this to cover the full diagram
+			const vbAttr = svg.getAttribute("viewBox");
+			const vbParts = vbAttr ? vbAttr.trim().split(/[\s,]+/).map(Number) : null;
+			const vbW = vbParts && vbParts.length === 4 ? vbParts[2] : svg.getBBox().width;
+			const vbH = vbParts && vbParts.length === 4 ? vbParts[3] : svg.getBBox().height;
 
-			// DEBUG: log all dimension info to help diagnose clipping
-			console.log("Mermaid Maestro PNG Export Debug:", {
-				originalViewBox: svg.getAttribute("viewBox"),
-				originalWidth: svg.getAttribute("width"),
-				originalHeight: svg.getAttribute("height"),
-				bbox: { x: bbox.x, y: bbox.y, w: bbox.width, h: bbox.height },
-				exportVB,
-				scale,
-				canvasSize: { w: exportVB.width * scale, h: exportVB.height * scale },
-			});
+			console.log("Mermaid Maestro PNG Export:", { viewBox: vbAttr, vbW, vbH, scale });
 
 			const clone = cloneSvgWithStyles(svg);
 
-			// Set viewBox to the full content bounds so nothing is clipped,
-			// and render at target resolution by setting width/height to scaled dims.
+			// Remove auto-fit CSS, keep viewBox unchanged, set width/height to
+			// the scaled target resolution so the browser rasterises vectors at
+			// full quality without needing ctx.scale() upscaling.
 			clone.removeAttribute("style");
-			setViewBox(clone, exportVB);
-			clone.setAttribute("width", String(exportVB.width * scale));
-			clone.setAttribute("height", String(exportVB.height * scale));
+			clone.setAttribute("width", String(Math.ceil(vbW * scale)));
+			clone.setAttribute("height", String(Math.ceil(vbH * scale)));
 			clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
 			const svgString = serializeSvg(clone);
-
-			// Base64 data URL approach — avoids canvas tainting issues
 			const dataUrl = svgToBase64DataUrl(svgString);
 
 			const img = new Image();
@@ -148,8 +132,8 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			});
 
 			const canvas = document.createElement("canvas");
-			canvas.width = exportVB.width * scale;
-			canvas.height = exportVB.height * scale;
+			canvas.width = img.naturalWidth;
+			canvas.height = img.naturalHeight;
 
 			const ctx = canvas.getContext("2d");
 			if (!ctx) throw new Error("Could not get canvas context");
@@ -159,7 +143,6 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				ctx.fillRect(0, 0, canvas.width, canvas.height);
 			}
 
-			// Draw at natural size — the Image already rendered the SVG at target resolution
 			ctx.drawImage(img, 0, 0);
 
 			const blob = await new Promise<Blob>((resolve, reject) => {
@@ -170,7 +153,16 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			});
 
 			await copyPngToClipboard(blob);
-			new Notice("PNG copied to clipboard!");
+
+			// DEBUG: also download the PNG file so we can inspect it directly
+			const debugUrl = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = debugUrl;
+			a.download = `mermaid-debug-${scale}x.png`;
+			a.click();
+			URL.revokeObjectURL(debugUrl);
+
+			new Notice(`PNG copied + downloaded (${img.naturalWidth}×${img.naturalHeight})`);
 		} catch (err) {
 			console.error("Mermaid OneInAll: PNG export failed", err);
 			new Notice(`PNG export failed: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -182,19 +174,15 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	 */
 	private async exportSvg(svg: SVGSVGElement): Promise<void> {
 		try {
-			const bbox = svg.getBBox();
-			const padding = 10;
-			const exportVB = {
-				x: bbox.x - padding,
-				y: bbox.y - padding,
-				width: bbox.width + padding * 2,
-				height: bbox.height + padding * 2,
-			};
+			const vbAttr = svg.getAttribute("viewBox");
+			const vbParts = vbAttr ? vbAttr.trim().split(/[\s,]+/).map(Number) : null;
+			const vbW = vbParts && vbParts.length === 4 ? vbParts[2] : svg.getBBox().width;
+			const vbH = vbParts && vbParts.length === 4 ? vbParts[3] : svg.getBBox().height;
+
 			const clone = cloneSvgWithStyles(svg);
 			clone.removeAttribute("style");
-			setViewBox(clone, exportVB);
-			clone.setAttribute("width", String(exportVB.width));
-			clone.setAttribute("height", String(exportVB.height));
+			clone.setAttribute("width", String(Math.ceil(vbW)));
+			clone.setAttribute("height", String(Math.ceil(vbH)));
 			const svgString = serializeSvg(clone);
 			await copyTextToClipboard(svgString);
 			new Notice("SVG copied to clipboard!");
