@@ -99,13 +99,16 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			// Get the full diagram dimensions from the original SVG before cloning
 			const dims = getSvgDimensions(svg);
 
+			const scale = this.settings.pngScale;
 			const clone = cloneSvgWithStyles(svg);
 
-			// Restore full dimensions on the clone — undo auto-fit's CSS overrides
-			// so the export captures the entire diagram, not just the visible portion
+			// Render SVG at target resolution natively — set width/height to
+			// scaled dimensions while keeping viewBox unchanged. This lets the
+			// browser rasterise the vectors at full resolution instead of
+			// upscaling a low-res bitmap (which caused clipping at higher scales).
 			clone.removeAttribute("style");
-			clone.setAttribute("width", String(dims.width));
-			clone.setAttribute("height", String(dims.height));
+			clone.setAttribute("width", String(dims.width * scale));
+			clone.setAttribute("height", String(dims.height * scale));
 			clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
 			const svgString = serializeSvg(clone);
@@ -120,9 +123,7 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				img.src = dataUrl;
 			});
 
-			const scale = this.settings.pngScale;
 			const canvas = document.createElement("canvas");
-			// Use the original SVG dimensions, not the clipped img.naturalWidth
 			canvas.width = dims.width * scale;
 			canvas.height = dims.height * scale;
 
@@ -134,8 +135,8 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				ctx.fillRect(0, 0, canvas.width, canvas.height);
 			}
 
-			ctx.scale(scale, scale);
-			ctx.drawImage(img, 0, 0, dims.width, dims.height);
+			// Draw at full size — no ctx.scale needed, SVG already rendered at target resolution
+			ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
 			const blob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob(
