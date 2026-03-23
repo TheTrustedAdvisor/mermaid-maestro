@@ -69,8 +69,6 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
 		processedSvgs.add(svg);
 		mermaidContainer.classList.add(ENHANCED_CLASS);
 
-		console.log("Maestro: enhancing diagram", svg.id || "(no id)");
-
 		// Apply auto-fit
 		if (plugin.settings.autoFitEnabled) {
 			applyAutoFit(svg);

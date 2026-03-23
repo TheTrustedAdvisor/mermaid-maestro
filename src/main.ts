@@ -104,8 +104,6 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			const vbW = vbParts && vbParts.length === 4 ? vbParts[2] : svg.getBBox().width;
 			const vbH = vbParts && vbParts.length === 4 ? vbParts[3] : svg.getBBox().height;
 
-			console.log("Mermaid Maestro PNG Export:", { viewBox: vbAttr, vbW, vbH, scale });
-
 			const clone = cloneSvgWithStyles(svg);
 
 			// Remove auto-fit CSS, keep viewBox unchanged, set width/height to
@@ -126,11 +124,6 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				img.src = dataUrl;
 			});
 
-			console.log("Mermaid Maestro PNG Export: img loaded", {
-				naturalWidth: img.naturalWidth,
-				naturalHeight: img.naturalHeight,
-			});
-
 			const canvas = document.createElement("canvas");
 			canvas.width = img.naturalWidth;
 			canvas.height = img.naturalHeight;
@@ -145,7 +138,8 @@ export default class MermaidOneInAllPlugin extends Plugin {
 
 			ctx.drawImage(img, 0, 0);
 
-			// Try Electron native clipboard via canvas data URL (most reliable on desktop)
+			// Use Electron native clipboard via canvas data URL — most reliable
+			// path for large images on desktop (avoids Blob/Buffer truncation)
 			let clipboardOk = false;
 			try {
 				const electron = require("electron");
@@ -153,15 +147,10 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				const nativeImg = electron.nativeImage.createFromDataURL(pngDataUrl);
 				electron.clipboard.writeImage(nativeImg);
 				clipboardOk = true;
-				console.log("Mermaid Maestro: wrote to clipboard via Electron nativeImage", {
-					isEmpty: nativeImg.isEmpty(),
-					size: nativeImg.getSize(),
-				});
-			} catch (e) {
-				console.warn("Mermaid Maestro: Electron clipboard failed", e);
+			} catch {
+				// Not in Electron — fall through to web API
 			}
 
-			// Fallback: web clipboard API via blob
 			if (!clipboardOk) {
 				const blob = await new Promise<Blob>((resolve, reject) => {
 					canvas.toBlob(
@@ -172,23 +161,9 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				await copyPngToClipboard(blob);
 			}
 
-			// DEBUG: also download the PNG file so we can inspect it directly
-			const debugBlob = await new Promise<Blob>((resolve, reject) => {
-				canvas.toBlob(
-					(b) => (b ? resolve(b) : reject(new Error("Canvas toBlob failed"))),
-					"image/png"
-				);
-			});
-			const debugUrl = URL.createObjectURL(debugBlob);
-			const a = document.createElement("a");
-			a.href = debugUrl;
-			a.download = `mermaid-debug-${scale}x.png`;
-			a.click();
-			URL.revokeObjectURL(debugUrl);
-
-			new Notice(`PNG copied + downloaded (${img.naturalWidth}×${img.naturalHeight})`);
+			new Notice("PNG copied to clipboard!");
 		} catch (err) {
-			console.error("Mermaid OneInAll: PNG export failed", err);
+			console.error("Mermaid Maestro: PNG export failed", err);
 			new Notice(`PNG export failed: ${err instanceof Error ? err.message : "Unknown error"}`);
 		}
 	}
