@@ -2,9 +2,25 @@ import { Platform } from "obsidian";
 
 /**
  * Copy a PNG blob to the clipboard.
- * On mobile, falls back to Web Share API if clipboard write fails.
+ * On desktop (Electron), uses the native clipboard API which handles
+ * large images reliably. On mobile, falls back to Web Share API.
  */
 export async function copyPngToClipboard(blob: Blob): Promise<void> {
+	// Desktop: use Electron's native clipboard for reliable large image support
+	if (Platform.isDesktop) {
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-var-requires
+			const electron = require("electron");
+			const buffer = Buffer.from(await blob.arrayBuffer());
+			const image = electron.nativeImage.createFromBuffer(buffer);
+			electron.clipboard.writeImage(image);
+			return;
+		} catch (e) {
+			console.warn("Mermaid Maestro: Electron clipboard failed, trying web API", e);
+			// Fall through to web API
+		}
+	}
+
 	try {
 		await navigator.clipboard.write([
 			new ClipboardItem({ "image/png": blob }),
