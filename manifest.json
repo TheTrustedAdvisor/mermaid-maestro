@@ -1,0 +1,9 @@
+{
+	"id": "mermaid-maestro",
+	"name": "Mermaid Maestro",
+	"version": "1.0.0",
+	"minAppVersion": "1.5.0",
+	"description": "All-in-one Mermaid enhancement: auto-fit, lightbox with pan/zoom, export to PNG/SVG/PDF, and context menu actions.",
+	"author": "mfalland",
+	"isDesktopOnly": false
+}
