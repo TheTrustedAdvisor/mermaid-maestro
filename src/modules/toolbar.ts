@@ -1,8 +1,8 @@
 import type MermaidOneInAllPlugin from "../main";
 
 /**
- * Create a hover toolbar for a Mermaid diagram wrapper.
- * Shows zoom controls and quick export buttons on hover.
+ * Create a hover toolbar for a Mermaid diagram.
+ * Shows lightbox and context menu quick-access buttons on hover.
  */
 export function createToolbar(
 	wrapper: HTMLElement,
@@ -12,22 +12,18 @@ export function createToolbar(
 ): HTMLElement {
 	const toolbar = wrapper.createDiv({ cls: "mermaid-oneinall-toolbar" });
 
-	// Zoom In
-	addToolbarButton(toolbar, "+", "Zoom in", () => {
-		plugin.openLightbox(svg);
-	});
-
 	// Fullscreen / Lightbox
 	addToolbarButton(toolbar, "⛶", "Open in lightbox", () => {
 		plugin.openLightbox(svg);
 	});
 
-	// Copy as PNG
-	addToolbarButton(toolbar, "📋", "Copy as PNG", () => {
+	// Export menu
+	addToolbarButton(toolbar, "📋", "Export options", () => {
+		const rect = toolbar.getBoundingClientRect();
 		plugin.showContextMenu(
 			new MouseEvent("contextmenu", {
-				clientX: toolbar.getBoundingClientRect().left,
-				clientY: toolbar.getBoundingClientRect().bottom,
+				clientX: rect.left,
+				clientY: rect.bottom,
 			}),
 			svg,
 			mermaidContainer
