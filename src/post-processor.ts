@@ -1,93 +1,75 @@
-import { MarkdownPostProcessorContext } from "obsidian";
 import type MermaidOneInAllPlugin from "./main";
 import { applyAutoFit } from "./modules/auto-fit";
 import { createToolbar } from "./modules/toolbar";
 
-const WRAPPER_CLASS = "mermaid-oneinall-enhanced";
+const ENHANCED_CLASS = "mermaid-oneinall-enhanced";
 
 // WeakSet prevents memory leaks — entries are GC'd when DOM nodes are removed
 const processedSvgs = new WeakSet<SVGSVGElement>();
 
 /**
- * Process a rendered element to find and enhance Mermaid SVGs.
- * Important: Does NOT reparent DOM nodes — Obsidian's Live Preview tracks
- * its component tree and reparenting breaks cleanup.
+ * Initialize Mermaid diagram detection using a global MutationObserver.
+ *
+ * Why not registerMarkdownPostProcessor?
+ * Obsidian renders Mermaid blocks asynchronously and separately from the
+ * markdown post-processor pipeline. The post-processor never receives
+ * elements containing Mermaid SVGs. All successful Mermaid plugins use
+ * a MutationObserver on document.body instead.
  */
-export function createPostProcessor(plugin: MermaidOneInAllPlugin) {
-	return (el: HTMLElement, _ctx: MarkdownPostProcessorContext) => {
-		console.log("Maestro: post-processor called, el:", el.tagName, el.className, "innerHTML length:", el.innerHTML.length);
-		console.log("Maestro: looking for SVGs in:", el.querySelectorAll("svg").length, "total SVGs,",
-			el.querySelectorAll(".mermaid").length, "mermaid containers,",
-			el.querySelectorAll(".mermaid svg").length, "mermaid SVGs");
+export function initMermaidObserver(plugin: MermaidOneInAllPlugin): void {
+	let debounceTimer: number | null = null;
 
-		// Process any Mermaid SVGs already rendered
-		processMermaidSvgs(el, plugin);
+	const observer = new MutationObserver(() => {
+		if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+		debounceTimer = window.setTimeout(() => {
+			debounceTimer = null;
+			scanAndEnhance(plugin);
+		}, 150);
+	});
 
-		// Debounced MutationObserver: Mermaid renders asynchronously in Live Preview.
-		// 150ms debounce batches rapid DOM mutations (many diagrams in one note).
-		let debounceTimer: number | null = null;
+	observer.observe(document.body, { childList: true, subtree: true });
 
-		const observer = new MutationObserver((mutations) => {
-			console.log("Maestro: MutationObserver fired, mutations:", mutations.length);
-			if (debounceTimer !== null) window.clearTimeout(debounceTimer);
-			debounceTimer = window.setTimeout(() => {
-				debounceTimer = null;
-				console.log("Maestro: debounce fired, checking for SVGs...");
-				processMermaidSvgs(el, plugin);
-			}, 150);
-		});
+	// Cleanup on plugin unload
+	plugin.register(() => {
+		observer.disconnect();
+		if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+	});
 
-		observer.observe(el, { childList: true, subtree: true });
+	// Also scan on layout changes and file opens (with slight delay)
+	plugin.registerEvent(
+		plugin.app.workspace.on("layout-change", () => {
+			setTimeout(() => scanAndEnhance(plugin), 300);
+		})
+	);
 
-		// Clean up observer when plugin unloads
-		plugin.register(() => {
-			observer.disconnect();
-			if (debounceTimer !== null) window.clearTimeout(debounceTimer);
-		});
-	};
+	// Initial scan after a short delay to catch already-rendered diagrams
+	setTimeout(() => scanAndEnhance(plugin), 500);
 }
 
-function processMermaidSvgs(el: HTMLElement, plugin: MermaidOneInAllPlugin): void {
-	const svgs = el.querySelectorAll<SVGSVGElement>(
+function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
+	const svgs = document.querySelectorAll<SVGSVGElement>(
 		".mermaid svg, pre.mermaid svg, svg[id^='mermaid-']"
 	);
 
-	console.log("Maestro: processMermaidSvgs found", svgs.length, "candidate SVGs");
-
 	for (const svg of Array.from(svgs)) {
-		// WeakSet dedup — no DOM pollution
-		if (processedSvgs.has(svg)) {
-			console.log("Maestro: skipping already processed SVG");
-			continue;
-		}
+		// WeakSet dedup
+		if (processedSvgs.has(svg)) continue;
 
-		// SVG readiness check: Mermaid may have created the <svg> tag
-		// but not yet populated it with content (async rendering)
-		if (svg.childElementCount === 0) {
-			console.log("Maestro: skipping empty SVG (childElementCount=0)");
-			continue;
-		}
+		// SVG readiness: skip if Mermaid hasn't populated it yet
+		if (svg.childElementCount === 0) continue;
 
-		// Check if not connected to DOM
-		if (!svg.isConnected) {
-			console.log("Maestro: skipping disconnected SVG");
-			continue;
-		}
+		// Skip disconnected nodes
+		if (!svg.isConnected) continue;
+
+		// Skip if already enhanced
+		const mermaidContainer = svg.closest(".mermaid") as HTMLElement | null;
+		if (!mermaidContainer) continue;
+		if (mermaidContainer.classList.contains(ENHANCED_CLASS)) continue;
 
 		processedSvgs.add(svg);
+		mermaidContainer.classList.add(ENHANCED_CLASS);
 
-		// Find the mermaid container (parent with .mermaid class)
-		const mermaidContainer = svg.closest(".mermaid") as HTMLElement | null;
-		if (!mermaidContainer) {
-			console.log("Maestro: skipping SVG - no .mermaid parent found");
-			continue;
-		}
-
-		console.log("Maestro: ENHANCING diagram!", svg.id, "children:", svg.childElementCount);
-
-		// Do NOT reparent — just add our class to the existing container.
-		// Reparenting breaks Obsidian's Live Preview component tracking.
-		mermaidContainer.classList.add(WRAPPER_CLASS);
+		console.log("Maestro: enhancing diagram", svg.id || "(no id)");
 
 		// Apply auto-fit
 		if (plugin.settings.autoFitEnabled) {
@@ -98,7 +80,6 @@ function processMermaidSvgs(el: HTMLElement, plugin: MermaidOneInAllPlugin): voi
 		if (plugin.settings.lightboxEnabled) {
 			mermaidContainer.style.cursor = "pointer";
 			mermaidContainer.addEventListener("click", (e) => {
-				// Don't open lightbox if user is selecting text
 				if (window.getSelection()?.toString()) return;
 				e.preventDefault();
 				e.stopPropagation();

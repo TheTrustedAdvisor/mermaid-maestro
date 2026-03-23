@@ -4,7 +4,7 @@ import {
 	MermaidOneInAllSettingTab,
 	type MermaidOneInAllSettings,
 } from "./settings";
-import { createPostProcessor } from "./post-processor";
+import { initMermaidObserver } from "./post-processor";
 import { cloneSvgWithStyles, serializeSvg } from "./utils/svg-utils";
 import { copyPngToClipboard, copyTextToClipboard, svgToBase64DataUrl } from "./utils/clipboard-utils";
 import { MermaidLightboxModal } from "./modules/lightbox";
@@ -18,8 +18,10 @@ export default class MermaidOneInAllPlugin extends Plugin {
 
 		console.log(`Mermaid Maestro v${this.manifest.version} loaded`);
 
-		// Register the post-processor that enhances Mermaid diagrams
-		this.registerMarkdownPostProcessor(createPostProcessor(this));
+		// Initialize global MutationObserver for Mermaid diagram detection.
+		// Note: registerMarkdownPostProcessor does NOT work for Mermaid —
+		// Obsidian renders Mermaid asynchronously outside the post-processor pipeline.
+		initMermaidObserver(this);
 
 		// Settings tab
 		this.addSettingTab(new MermaidOneInAllSettingTab(this.app, this));
