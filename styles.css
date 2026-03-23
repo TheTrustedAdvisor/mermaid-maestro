@@ -78,11 +78,20 @@
 	max-height: none !important;
 }
 
-/* Zoom indicator */
-.mermaid-oneinall-zoom-indicator {
+/* Indicator bar: zoom % + diagram counter */
+.mermaid-oneinall-indicator-bar {
 	position: absolute;
 	bottom: 12px;
 	right: 12px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	z-index: 10;
+	pointer-events: none;
+}
+
+/* Zoom indicator */
+.mermaid-oneinall-zoom-indicator {
 	background: var(--background-secondary);
 	color: var(--text-normal);
 	padding: 4px 10px;
@@ -90,8 +99,102 @@
 	font-size: 12px;
 	font-family: var(--font-monospace);
 	opacity: 0.8;
-	pointer-events: none;
+}
+
+/* Diagram counter "2 / 5" */
+.mermaid-oneinall-nav-counter {
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	padding: 4px 10px;
+	border-radius: 4px;
+	font-size: 12px;
+	font-family: var(--font-monospace);
+	opacity: 0.8;
+}
+
+/* Prev / Next diagram navigation buttons */
+.mermaid-oneinall-nav-btn {
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 50%;
+	width: 40px;
+	height: 40px;
+	font-size: 16px;
+	cursor: pointer;
+	opacity: 0.7;
+	transition: opacity 0.2s ease, background 0.2s ease;
+	z-index: 15;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+}
+
+.mermaid-oneinall-nav-btn:hover {
+	opacity: 1;
+	background: var(--background-modifier-hover);
+}
+
+.mermaid-oneinall-nav-btn:disabled {
+	opacity: 0.2;
+	cursor: not-allowed;
+}
+
+.mermaid-oneinall-nav-prev {
+	left: 12px;
+}
+
+.mermaid-oneinall-nav-next {
+	right: 12px;
+}
+
+/* ─── Minimap ─── */
+
+.mermaid-oneinall-minimap {
+	position: absolute;
+	bottom: 44px;
+	left: 12px;
+	width: 180px;
+	height: 120px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	overflow: hidden;
+	opacity: 0.85;
 	z-index: 10;
+	cursor: crosshair;
+	transition: opacity 0.3s ease;
+}
+
+.mermaid-oneinall-minimap-hidden {
+	display: none;
+}
+
+.mermaid-oneinall-minimap-svg {
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.mermaid-oneinall-minimap-svg svg {
+	position: static !important;
+	width: 100% !important;
+	height: 100% !important;
+	max-width: none !important;
+	max-height: none !important;
+}
+
+/* Current viewport indicator rectangle */
+.mermaid-oneinall-minimap-viewport {
+	position: absolute;
+	border: 2px solid var(--interactive-accent);
+	background: rgba(var(--interactive-accent-rgb, 99, 102, 241), 0.15);
+	box-sizing: border-box;
+	pointer-events: none;
 }
 
 /* Usage hint — fades out on first interaction */

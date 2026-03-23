@@ -1,6 +1,8 @@
 import type MermaidOneInAllPlugin from "./main";
 import { applyAutoFit } from "./modules/auto-fit";
 import { createToolbar } from "./modules/toolbar";
+import { cloneSvgWithStyles, serializeSvg, parseViewBox } from "./utils/svg-utils";
+import { svgToBase64DataUrl } from "./utils/clipboard-utils";
 
 const ENHANCED_CLASS = "mermaid-oneinall-enhanced";
 
@@ -98,5 +100,76 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
 				plugin.showContextMenu(e, svg, mermaidContainer);
 			});
 		}
+
+		// Drag & drop export: make the container draggable so users can drag
+		// the diagram as a PNG into other applications.
+		setupDragExport(mermaidContainer, svg, plugin.settings.pngScale);
 	}
+}
+
+/**
+ * Make a Mermaid container draggable, exporting the SVG as PNG on drag start.
+ */
+function setupDragExport(
+	container: HTMLElement,
+	svg: SVGSVGElement,
+	scale: number
+): void {
+	container.setAttribute("draggable", "true");
+
+	container.addEventListener("dragstart", async (e: DragEvent) => {
+		if (!e.dataTransfer) return;
+
+		try {
+			// Determine output dimensions from viewBox
+			const vbAttr = svg.getAttribute("viewBox");
+			const vbParts = vbAttr ? vbAttr.trim().split(/[\s,]+/).map(Number) : null;
+			const vb = parseViewBox(svg);
+			const vbW = vb ? vb.width : (vbParts && vbParts.length === 4 ? vbParts[2] : svg.getBBox().width);
+			const vbH = vb ? vb.height : (vbParts && vbParts.length === 4 ? vbParts[3] : svg.getBBox().height);
+
+			const clone = cloneSvgWithStyles(svg);
+			clone.removeAttribute("style");
+			clone.setAttribute("width", String(Math.ceil(vbW * scale)));
+			clone.setAttribute("height", String(Math.ceil(vbH * scale)));
+			clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+			const svgString = serializeSvg(clone);
+			const dataUrl = svgToBase64DataUrl(svgString);
+
+			// Render to canvas for PNG data
+			const img = new Image();
+			await new Promise<void>((resolve, reject) => {
+				img.onload = () => resolve();
+				img.onerror = () => reject(new Error("Failed to load SVG as image"));
+				img.src = dataUrl;
+			});
+
+			const canvas = document.createElement("canvas");
+			canvas.width = img.naturalWidth;
+			canvas.height = img.naturalHeight;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) return;
+			ctx.drawImage(img, 0, 0);
+
+			// Set drag image (small visual thumbnail)
+			const thumbCanvas = document.createElement("canvas");
+			const thumbScale = Math.min(1, 200 / Math.max(canvas.width, canvas.height));
+			thumbCanvas.width = Math.ceil(canvas.width * thumbScale);
+			thumbCanvas.height = Math.ceil(canvas.height * thumbScale);
+			const thumbCtx = thumbCanvas.getContext("2d");
+			if (thumbCtx) {
+				thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+				e.dataTransfer.setDragImage(thumbCanvas, thumbCanvas.width / 2, thumbCanvas.height / 2);
+			}
+
+			// Provide the PNG as a data URL in the drag transfer
+			const pngDataUrl = canvas.toDataURL("image/png");
+			e.dataTransfer.setData("text/uri-list", pngDataUrl);
+			e.dataTransfer.setData("text/plain", pngDataUrl);
+			e.dataTransfer.effectAllowed = "copy";
+		} catch (err) {
+			console.error("Mermaid Maestro: drag export failed", err);
+		}
+	});
 }
