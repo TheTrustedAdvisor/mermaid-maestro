@@ -3,17 +3,18 @@ import type MermaidOneInAllPlugin from "./main";
 import { applyAutoFit } from "./modules/auto-fit";
 import { createToolbar } from "./modules/toolbar";
 
-const WRAPPER_CLASS = "mermaid-oneinall-wrapper";
+const WRAPPER_CLASS = "mermaid-oneinall-enhanced";
 
 // WeakSet prevents memory leaks — entries are GC'd when DOM nodes are removed
 const processedSvgs = new WeakSet<SVGSVGElement>();
 
 /**
  * Process a rendered element to find and enhance Mermaid SVGs.
- * Uses WeakSet for dedup, debounced MutationObserver, and SVG readiness checks.
+ * Important: Does NOT reparent DOM nodes — Obsidian's Live Preview tracks
+ * its component tree and reparenting breaks cleanup.
  */
 export function createPostProcessor(plugin: MermaidOneInAllPlugin) {
-	return (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+	return (el: HTMLElement, _ctx: MarkdownPostProcessorContext) => {
 		// Process any Mermaid SVGs already rendered
 		processMermaidSvgs(el, plugin);
 
@@ -52,11 +53,8 @@ function processMermaidSvgs(el: HTMLElement, plugin: MermaidOneInAllPlugin): voi
 		// but not yet populated it with content (async rendering)
 		if (svg.childElementCount === 0) continue;
 
-		// Check if not connected to DOM (could happen between observer fire and debounce)
+		// Check if not connected to DOM
 		if (!svg.isConnected) continue;
-
-		// Check if already wrapped by another instance
-		if (svg.closest("." + WRAPPER_CLASS)) continue;
 
 		processedSvgs.add(svg);
 
@@ -64,12 +62,9 @@ function processMermaidSvgs(el: HTMLElement, plugin: MermaidOneInAllPlugin): voi
 		const mermaidContainer = svg.closest(".mermaid") as HTMLElement | null;
 		if (!mermaidContainer) continue;
 
-		// Wrap in our container
-		const wrapper = document.createElement("div");
-		wrapper.classList.add(WRAPPER_CLASS);
-
-		mermaidContainer.parentNode?.insertBefore(wrapper, mermaidContainer);
-		wrapper.appendChild(mermaidContainer);
+		// Do NOT reparent — just add our class to the existing container.
+		// Reparenting breaks Obsidian's Live Preview component tracking.
+		mermaidContainer.classList.add(WRAPPER_CLASS);
 
 		// Apply auto-fit
 		if (plugin.settings.autoFitEnabled) {
@@ -78,8 +73,8 @@ function processMermaidSvgs(el: HTMLElement, plugin: MermaidOneInAllPlugin): voi
 
 		// Register click for lightbox
 		if (plugin.settings.lightboxEnabled) {
-			wrapper.style.cursor = "pointer";
-			wrapper.addEventListener("click", (e) => {
+			mermaidContainer.style.cursor = "pointer";
+			mermaidContainer.addEventListener("click", (e) => {
 				// Don't open lightbox if user is selecting text
 				if (window.getSelection()?.toString()) return;
 				e.preventDefault();
@@ -90,12 +85,12 @@ function processMermaidSvgs(el: HTMLElement, plugin: MermaidOneInAllPlugin): voi
 
 		// Add hover toolbar
 		if (plugin.settings.toolbarEnabled) {
-			createToolbar(wrapper, svg, mermaidContainer, plugin);
+			createToolbar(mermaidContainer, svg, mermaidContainer, plugin);
 		}
 
 		// Register context menu
 		if (plugin.settings.contextMenuEnabled) {
-			wrapper.addEventListener("contextmenu", (e) => {
+			mermaidContainer.addEventListener("contextmenu", (e) => {
 				e.preventDefault();
 				e.stopPropagation();
 				plugin.showContextMenu(e, svg, mermaidContainer);

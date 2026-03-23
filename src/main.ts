@@ -16,6 +16,8 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		console.log(`Mermaid Maestro v${this.manifest.version} loaded`);
+
 		// Register the post-processor that enhances Mermaid diagrams
 		this.registerMarkdownPostProcessor(createPostProcessor(this));
 

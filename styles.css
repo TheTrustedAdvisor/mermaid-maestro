@@ -1,20 +1,19 @@
-/* Mermaid OneInAll - Container Styling */
+/* Mermaid Maestro - Container Styling */
 
-.mermaid-oneinall-wrapper {
+.mermaid-oneinall-enhanced {
 	position: relative;
 	width: 100%;
 	overflow: hidden;
-	margin: 0.5em 0;
 	border-radius: 4px;
 	transition: box-shadow 0.2s ease;
 }
 
-.mermaid-oneinall-wrapper:hover {
+.mermaid-oneinall-enhanced:hover {
 	box-shadow: 0 0 0 2px var(--interactive-accent);
 }
 
 /* Ensure SVG fills the container */
-.mermaid-oneinall-wrapper .mermaid svg {
+.mermaid-oneinall-enhanced svg {
 	display: block;
 	width: 100%;
 	height: auto;
@@ -120,7 +119,7 @@
 	z-index: 5;
 }
 
-.mermaid-oneinall-wrapper:hover .mermaid-oneinall-toolbar {
+.mermaid-oneinall-enhanced:hover .mermaid-oneinall-toolbar {
 	opacity: 1;
 }
 
