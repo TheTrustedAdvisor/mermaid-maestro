@@ -109,6 +109,17 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				height: bbox.height + padding * 2,
 			};
 
+			// DEBUG: log all dimension info to help diagnose clipping
+			console.log("Mermaid Maestro PNG Export Debug:", {
+				originalViewBox: svg.getAttribute("viewBox"),
+				originalWidth: svg.getAttribute("width"),
+				originalHeight: svg.getAttribute("height"),
+				bbox: { x: bbox.x, y: bbox.y, w: bbox.width, h: bbox.height },
+				exportVB,
+				scale,
+				canvasSize: { w: exportVB.width * scale, h: exportVB.height * scale },
+			});
+
 			const clone = cloneSvgWithStyles(svg);
 
 			// Set viewBox to the full content bounds so nothing is clipped,
@@ -131,6 +142,11 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				img.src = dataUrl;
 			});
 
+			console.log("Mermaid Maestro PNG Export: img loaded", {
+				naturalWidth: img.naturalWidth,
+				naturalHeight: img.naturalHeight,
+			});
+
 			const canvas = document.createElement("canvas");
 			canvas.width = exportVB.width * scale;
 			canvas.height = exportVB.height * scale;
@@ -143,8 +159,8 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				ctx.fillRect(0, 0, canvas.width, canvas.height);
 			}
 
-			// Draw at full size — no ctx.scale needed, SVG already rendered at target resolution
-			ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+			// Draw at natural size — the Image already rendered the SVG at target resolution
+			ctx.drawImage(img, 0, 0);
 
 			const blob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob(
