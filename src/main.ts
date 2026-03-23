@@ -5,7 +5,7 @@ import {
 	type MermaidOneInAllSettings,
 } from "./settings";
 import { initMermaidObserver } from "./post-processor";
-import { cloneSvgWithStyles, serializeSvg } from "./utils/svg-utils";
+import { cloneSvgWithStyles, serializeSvg, getSvgDimensions } from "./utils/svg-utils";
 import { copyPngToClipboard, copyTextToClipboard, svgToBase64DataUrl } from "./utils/clipboard-utils";
 import { MermaidLightboxModal } from "./modules/lightbox";
 import { exportPdf } from "./modules/export/pdf-export";
@@ -96,7 +96,18 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	 */
 	private async exportPng(svg: SVGSVGElement, background: "transparent" | "white"): Promise<void> {
 		try {
+			// Get the full diagram dimensions from the original SVG before cloning
+			const dims = getSvgDimensions(svg);
+
 			const clone = cloneSvgWithStyles(svg);
+
+			// Restore full dimensions on the clone — undo auto-fit's CSS overrides
+			// so the export captures the entire diagram, not just the visible portion
+			clone.removeAttribute("style");
+			clone.setAttribute("width", String(dims.width));
+			clone.setAttribute("height", String(dims.height));
+			clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
 			const svgString = serializeSvg(clone);
 
 			// Base64 data URL approach — avoids canvas tainting issues
@@ -111,8 +122,9 @@ export default class MermaidOneInAllPlugin extends Plugin {
 
 			const scale = this.settings.pngScale;
 			const canvas = document.createElement("canvas");
-			canvas.width = img.naturalWidth * scale;
-			canvas.height = img.naturalHeight * scale;
+			// Use the original SVG dimensions, not the clipped img.naturalWidth
+			canvas.width = dims.width * scale;
+			canvas.height = dims.height * scale;
 
 			const ctx = canvas.getContext("2d");
 			if (!ctx) throw new Error("Could not get canvas context");
@@ -123,7 +135,7 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			}
 
 			ctx.scale(scale, scale);
-			ctx.drawImage(img, 0, 0);
+			ctx.drawImage(img, 0, 0, dims.width, dims.height);
 
 			const blob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob(
@@ -145,7 +157,12 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	 */
 	private async exportSvg(svg: SVGSVGElement): Promise<void> {
 		try {
+			const dims = getSvgDimensions(svg);
 			const clone = cloneSvgWithStyles(svg);
+			// Restore full dimensions for clean SVG export
+			clone.removeAttribute("style");
+			clone.setAttribute("width", String(dims.width));
+			clone.setAttribute("height", String(dims.height));
 			const svgString = serializeSvg(clone);
 			await copyTextToClipboard(svgString);
 			new Notice("SVG copied to clipboard!");
