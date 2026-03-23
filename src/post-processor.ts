@@ -31,14 +31,11 @@ export function createPostProcessor(plugin: MermaidOneInAllPlugin) {
 
 		observer.observe(el, { childList: true, subtree: true });
 
-		// Use Obsidian's lifecycle for cleanup
-		ctx.addChild({
-			onload() {},
-			onunload() {
-				observer.disconnect();
-				if (debounceTimer !== null) window.clearTimeout(debounceTimer);
-			},
-		} as any);
+		// Clean up observer when plugin unloads
+		plugin.register(() => {
+			observer.disconnect();
+			if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+		});
 	};
 }
 
