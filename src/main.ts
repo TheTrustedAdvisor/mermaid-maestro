@@ -5,7 +5,7 @@ import {
 	type MermaidOneInAllSettings,
 } from "./settings";
 import { initMermaidObserver } from "./post-processor";
-import { cloneSvgWithStyles, serializeSvg, getSvgDimensions } from "./utils/svg-utils";
+import { cloneSvgWithStyles, serializeSvg, setViewBox } from "./utils/svg-utils";
 import { copyPngToClipboard, copyTextToClipboard, svgToBase64DataUrl } from "./utils/clipboard-utils";
 import { MermaidLightboxModal } from "./modules/lightbox";
 import { exportPdf } from "./modules/export/pdf-export";
@@ -96,19 +96,27 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	 */
 	private async exportPng(svg: SVGSVGElement, background: "transparent" | "white"): Promise<void> {
 		try {
-			// Get the full diagram dimensions from the original SVG before cloning
-			const dims = getSvgDimensions(svg);
-
 			const scale = this.settings.pngScale;
+
+			// Use getBBox() on the live SVG to get the true bounding box of all
+			// rendered content — viewBox can be smaller than actual content.
+			const bbox = svg.getBBox();
+			const padding = 10;
+			const exportVB = {
+				x: bbox.x - padding,
+				y: bbox.y - padding,
+				width: bbox.width + padding * 2,
+				height: bbox.height + padding * 2,
+			};
+
 			const clone = cloneSvgWithStyles(svg);
 
-			// Render SVG at target resolution natively — set width/height to
-			// scaled dimensions while keeping viewBox unchanged. This lets the
-			// browser rasterise the vectors at full resolution instead of
-			// upscaling a low-res bitmap (which caused clipping at higher scales).
+			// Set viewBox to the full content bounds so nothing is clipped,
+			// and render at target resolution by setting width/height to scaled dims.
 			clone.removeAttribute("style");
-			clone.setAttribute("width", String(dims.width * scale));
-			clone.setAttribute("height", String(dims.height * scale));
+			setViewBox(clone, exportVB);
+			clone.setAttribute("width", String(exportVB.width * scale));
+			clone.setAttribute("height", String(exportVB.height * scale));
 			clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
 			const svgString = serializeSvg(clone);
@@ -124,8 +132,8 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			});
 
 			const canvas = document.createElement("canvas");
-			canvas.width = dims.width * scale;
-			canvas.height = dims.height * scale;
+			canvas.width = exportVB.width * scale;
+			canvas.height = exportVB.height * scale;
 
 			const ctx = canvas.getContext("2d");
 			if (!ctx) throw new Error("Could not get canvas context");
@@ -158,12 +166,19 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	 */
 	private async exportSvg(svg: SVGSVGElement): Promise<void> {
 		try {
-			const dims = getSvgDimensions(svg);
+			const bbox = svg.getBBox();
+			const padding = 10;
+			const exportVB = {
+				x: bbox.x - padding,
+				y: bbox.y - padding,
+				width: bbox.width + padding * 2,
+				height: bbox.height + padding * 2,
+			};
 			const clone = cloneSvgWithStyles(svg);
-			// Restore full dimensions for clean SVG export
 			clone.removeAttribute("style");
-			clone.setAttribute("width", String(dims.width));
-			clone.setAttribute("height", String(dims.height));
+			setViewBox(clone, exportVB);
+			clone.setAttribute("width", String(exportVB.width));
+			clone.setAttribute("height", String(exportVB.height));
 			const svgString = serializeSvg(clone);
 			await copyTextToClipboard(svgString);
 			new Notice("SVG copied to clipboard!");

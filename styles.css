@@ -60,6 +60,13 @@
 	cursor: grabbing;
 }
 
+/* Modal close button must stay clickable above the grab-cursor container */
+.mermaid-oneinall-lightbox .modal-close-button {
+	cursor: pointer;
+	z-index: 20;
+	pointer-events: auto;
+}
+
 /* SVG inside lightbox must fill container — NOT inherit auto-fit rules */
 .mermaid-oneinall-lightbox-container svg {
 	position: absolute;
