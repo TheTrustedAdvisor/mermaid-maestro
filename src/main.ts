@@ -145,17 +145,41 @@ export default class MermaidOneInAllPlugin extends Plugin {
 
 			ctx.drawImage(img, 0, 0);
 
-			const blob = await new Promise<Blob>((resolve, reject) => {
+			// Try Electron native clipboard via canvas data URL (most reliable on desktop)
+			let clipboardOk = false;
+			try {
+				const electron = require("electron");
+				const pngDataUrl = canvas.toDataURL("image/png");
+				const nativeImg = electron.nativeImage.createFromDataURL(pngDataUrl);
+				electron.clipboard.writeImage(nativeImg);
+				clipboardOk = true;
+				console.log("Mermaid Maestro: wrote to clipboard via Electron nativeImage", {
+					isEmpty: nativeImg.isEmpty(),
+					size: nativeImg.getSize(),
+				});
+			} catch (e) {
+				console.warn("Mermaid Maestro: Electron clipboard failed", e);
+			}
+
+			// Fallback: web clipboard API via blob
+			if (!clipboardOk) {
+				const blob = await new Promise<Blob>((resolve, reject) => {
+					canvas.toBlob(
+						(b) => (b ? resolve(b) : reject(new Error("Canvas toBlob failed"))),
+						"image/png"
+					);
+				});
+				await copyPngToClipboard(blob);
+			}
+
+			// DEBUG: also download the PNG file so we can inspect it directly
+			const debugBlob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob(
 					(b) => (b ? resolve(b) : reject(new Error("Canvas toBlob failed"))),
 					"image/png"
 				);
 			});
-
-			await copyPngToClipboard(blob);
-
-			// DEBUG: also download the PNG file so we can inspect it directly
-			const debugUrl = URL.createObjectURL(blob);
+			const debugUrl = URL.createObjectURL(debugBlob);
 			const a = document.createElement("a");
 			a.href = debugUrl;
 			a.download = `mermaid-debug-${scale}x.png`;
