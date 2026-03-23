@@ -15,6 +15,11 @@ const processedSvgs = new WeakSet<SVGSVGElement>();
  */
 export function createPostProcessor(plugin: MermaidOneInAllPlugin) {
 	return (el: HTMLElement, _ctx: MarkdownPostProcessorContext) => {
+		console.log("Maestro: post-processor called, el:", el.tagName, el.className, "innerHTML length:", el.innerHTML.length);
+		console.log("Maestro: looking for SVGs in:", el.querySelectorAll("svg").length, "total SVGs,",
+			el.querySelectorAll(".mermaid").length, "mermaid containers,",
+			el.querySelectorAll(".mermaid svg").length, "mermaid SVGs");
+
 		// Process any Mermaid SVGs already rendered
 		processMermaidSvgs(el, plugin);
 
@@ -22,10 +27,12 @@ export function createPostProcessor(plugin: MermaidOneInAllPlugin) {
 		// 150ms debounce batches rapid DOM mutations (many diagrams in one note).
 		let debounceTimer: number | null = null;
 
-		const observer = new MutationObserver(() => {
+		const observer = new MutationObserver((mutations) => {
+			console.log("Maestro: MutationObserver fired, mutations:", mutations.length);
 			if (debounceTimer !== null) window.clearTimeout(debounceTimer);
 			debounceTimer = window.setTimeout(() => {
 				debounceTimer = null;
+				console.log("Maestro: debounce fired, checking for SVGs...");
 				processMermaidSvgs(el, plugin);
 			}, 150);
 		});
@@ -45,22 +52,38 @@ function processMermaidSvgs(el: HTMLElement, plugin: MermaidOneInAllPlugin): voi
 		".mermaid svg, pre.mermaid svg, svg[id^='mermaid-']"
 	);
 
+	console.log("Maestro: processMermaidSvgs found", svgs.length, "candidate SVGs");
+
 	for (const svg of Array.from(svgs)) {
 		// WeakSet dedup — no DOM pollution
-		if (processedSvgs.has(svg)) continue;
+		if (processedSvgs.has(svg)) {
+			console.log("Maestro: skipping already processed SVG");
+			continue;
+		}
 
 		// SVG readiness check: Mermaid may have created the <svg> tag
 		// but not yet populated it with content (async rendering)
-		if (svg.childElementCount === 0) continue;
+		if (svg.childElementCount === 0) {
+			console.log("Maestro: skipping empty SVG (childElementCount=0)");
+			continue;
+		}
 
 		// Check if not connected to DOM
-		if (!svg.isConnected) continue;
+		if (!svg.isConnected) {
+			console.log("Maestro: skipping disconnected SVG");
+			continue;
+		}
 
 		processedSvgs.add(svg);
 
 		// Find the mermaid container (parent with .mermaid class)
 		const mermaidContainer = svg.closest(".mermaid") as HTMLElement | null;
-		if (!mermaidContainer) continue;
+		if (!mermaidContainer) {
+			console.log("Maestro: skipping SVG - no .mermaid parent found");
+			continue;
+		}
+
+		console.log("Maestro: ENHANCING diagram!", svg.id, "children:", svg.childElementCount);
 
 		// Do NOT reparent — just add our class to the existing container.
 		// Reparenting breaks Obsidian's Live Preview component tracking.
