@@ -1,5 +1,8 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type MermaidMaestroPlugin from "./main";
+import { detectMermaidVersion } from "./modules/mermaid-config";
+
+export type MermaidTheme = "default" | "dark" | "forest" | "neutral" | "base";
 
 export interface MermaidMaestroSettings {
 	autoFitEnabled: boolean;
@@ -7,6 +10,10 @@ export interface MermaidMaestroSettings {
 	contextMenuEnabled: boolean;
 	toolbarEnabled: boolean;
 	pngScale: number;
+	// Mermaid engine settings
+	elkEnabled: boolean;
+	maxEdges: number;
+	defaultTheme: MermaidTheme;
 }
 
 export const DEFAULT_SETTINGS: MermaidMaestroSettings = {
@@ -15,6 +22,9 @@ export const DEFAULT_SETTINGS: MermaidMaestroSettings = {
 	contextMenuEnabled: true,
 	toolbarEnabled: true,
 	pngScale: 2,
+	elkEnabled: false,
+	maxEdges: 500,
+	defaultTheme: "default",
 };
 
 export class MermaidMaestroSettingTab extends PluginSettingTab {
@@ -29,7 +39,9 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Mermaid Maestro Settings" });
+		// ── Diagram Enhancement ──────────────────────────────────
+
+		containerEl.createEl("h2", { text: "Diagram Enhancement" });
 
 		new Setting(containerEl)
 			.setName("Auto-Fit")
@@ -79,6 +91,10 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// ── Export ────────────────────────────────────────────────
+
+		containerEl.createEl("h2", { text: "Export" });
+
 		new Setting(containerEl)
 			.setName("PNG Export Scale")
 			.setDesc("Resolution multiplier for PNG export (2x recommended for Retina displays).")
@@ -95,5 +111,70 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// ── Mermaid Engine ───────────────────────────────────────
+
+		containerEl.createEl("h2", { text: "Mermaid Engine" });
+
+		const version = detectMermaidVersion();
+		new Setting(containerEl)
+			.setName("Mermaid Version")
+			.setDesc(`Detected: ${version}`)
+			.setDisabled(true);
+
+		new Setting(containerEl)
+			.setName("ELK Layout Engine")
+			.setDesc(
+				"Enable the ELK layout engine for improved diagram layouts. " +
+				"Use 'flowchart-elk' or add 'config: layout: elk' to your diagrams. " +
+				"Requires Mermaid v11+. Reload after changing."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.elkEnabled)
+					.onChange(async (value) => {
+						this.plugin.settings.elkEnabled = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Max Edges")
+			.setDesc(
+				"Maximum number of edges allowed in a diagram (default: 500). " +
+				"Increase for large architecture diagrams. Reload after changing."
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("500")
+					.setValue(String(this.plugin.settings.maxEdges))
+					.onChange(async (value) => {
+						const parsed = parseInt(value, 10);
+						if (!isNaN(parsed) && parsed > 0) {
+							this.plugin.settings.maxEdges = Math.min(50000, parsed);
+							await this.plugin.saveSettings();
+						}
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Default Theme")
+			.setDesc(
+				"Global Mermaid theme for all diagrams. " +
+				"Individual diagrams can override this with %%{init: {'theme': '...'}}%% directives. " +
+				"Reload after changing."
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("default", "Default")
+					.addOption("dark", "Dark")
+					.addOption("forest", "Forest")
+					.addOption("neutral", "Neutral")
+					.addOption("base", "Base (for custom colors)")
+					.setValue(this.plugin.settings.defaultTheme)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultTheme = value as MermaidTheme;
+						await this.plugin.saveSettings();
+					})
+			);
 	}
 }

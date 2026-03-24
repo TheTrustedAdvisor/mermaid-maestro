@@ -89,7 +89,13 @@ export function sanitizeSvg(svg: SVGSVGElement): void {
 		}
 		for (const hrefAttr of ["href", "xlink:href"]) {
 			const val = el.getAttribute(hrefAttr);
-			if (val && /^\s*javascript\s*:/i.test(val)) {
+			if (!val) continue;
+			// Block javascript: URIs
+			if (/^\s*javascript\s*:/i.test(val)) {
+				el.removeAttribute(hrefAttr);
+			}
+			// Block data: URIs except safe image types used by Mermaid
+			if (/^\s*data\s*:/i.test(val) && !/^\s*data:image\/(png|jpeg|gif|svg\+xml|webp)[;,]/i.test(val)) {
 				el.removeAttribute(hrefAttr);
 			}
 		}
@@ -125,8 +131,10 @@ export function cloneSvgWithStyles(svg: SVGSVGElement): SVGSVGElement {
 		if (!style) continue;
 
 		// Copy key visual properties
-		const props = ["fill", "stroke", "stroke-width", "font-family", "font-size",
-			"font-weight", "opacity", "color", "background-color"];
+		const props = ["fill", "stroke", "stroke-width", "stroke-dasharray",
+			"stroke-linecap", "stroke-linejoin", "font-family", "font-size",
+			"font-weight", "opacity", "color", "background-color",
+			"text-anchor", "dominant-baseline", "text-decoration"];
 		for (const prop of props) {
 			const value = computed.getPropertyValue(prop);
 			if (value) {

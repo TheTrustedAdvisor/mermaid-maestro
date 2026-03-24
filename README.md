@@ -41,6 +41,14 @@ A small toolbar appears when hovering over a diagram with quick-access buttons f
 ### Drag & Drop Export
 Drag any diagram directly into other applications as a PNG image.
 
+### Mermaid Engine Configuration
+Configure Obsidian's built-in Mermaid.js engine directly from the plugin settings:
+
+- **ELK Layout Engine** — Enable the ELK layout engine for dramatically improved layouts of complex diagrams. Use `flowchart-elk` or add `config: layout: elk` to your diagrams.
+- **Max Edges Override** — Increase the default 500-edge limit for large architecture diagrams.
+- **Global Theme** — Set a default Mermaid theme (default, dark, forest, neutral, base) for all diagrams. Individual diagrams can still override with `%%{init: {'theme': '...'}}%%` directives.
+- **Version Detection** — Displays the Mermaid.js version bundled with your Obsidian installation.
+
 ### Additional Features
 - Configurable PNG export resolution (1x, 2x, 3x, 4x)
 - Mobile support with always-visible toolbar
@@ -58,7 +66,7 @@ Drag any diagram directly into other applications as a PNG image.
 4. Install and enable the plugin
 
 ### Manual Installation
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](../../releases/latest)
+1. Download `main.js`, `elk-layout.js`, `manifest.json`, and `styles.css` from the [latest release](../../releases/latest)
 2. Create a folder `mermaid-maestro` in your vault's `.obsidian/plugins/` directory
 3. Copy the downloaded files into that folder
 4. Restart Obsidian and enable the plugin in Settings → Community Plugins
@@ -72,6 +80,9 @@ Drag any diagram directly into other applications as a PNG image.
 | Context Menu | On | Right-click export menu |
 | Hover Toolbar | On | Show toolbar on diagram hover |
 | PNG Export Scale | 2x | Resolution multiplier for PNG export |
+| ELK Layout Engine | Off | Enable ELK for improved complex diagram layouts |
+| Max Edges | 500 | Maximum edges allowed per diagram |
+| Default Theme | default | Global Mermaid theme for all diagrams |
 
 ## Development
 

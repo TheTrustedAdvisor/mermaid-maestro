@@ -31,7 +31,18 @@ export function initMermaidObserver(plugin: MermaidMaestroPlugin): void {
 		}, 150);
 	};
 
-	const observer = new MutationObserver(debouncedScan);
+	const observer = new MutationObserver((mutations) => {
+		// Early exit: only schedule a scan if added nodes could contain Mermaid
+		const hasPotentialMermaid = mutations.some((m) =>
+			Array.from(m.addedNodes).some(
+				(n) =>
+					n instanceof HTMLElement &&
+					(n.classList.contains("mermaid") ||
+						n.querySelector?.(".mermaid, svg[id^='mermaid-']"))
+			)
+		);
+		if (hasPotentialMermaid) debouncedScan();
+	});
 
 	observer.observe(document.body, { childList: true, subtree: true });
 
@@ -70,13 +81,10 @@ function scanAndEnhance(plugin: MermaidMaestroPlugin): void {
 		const mermaidContainer = svg.closest(".mermaid");
 		if (!(mermaidContainer instanceof HTMLElement)) continue;
 
+		// If container was already enhanced but SVG is new (re-rendered),
+		// reset so we re-attach listeners to the fresh SVG.
 		if (mermaidContainer.classList.contains(ENHANCED_CLASS)) {
-			// Check if the SVG is new (re-rendered by Obsidian)
-			if (!processedSvgs.has(svg)) {
-				mermaidContainer.classList.remove(ENHANCED_CLASS);
-			} else {
-				continue;
-			}
+			mermaidContainer.classList.remove(ENHANCED_CLASS);
 		}
 
 		processedSvgs.add(svg);
@@ -87,6 +95,15 @@ function scanAndEnhance(plugin: MermaidMaestroPlugin): void {
 		if (prevAc) prevAc.abort();
 		const ac = new AbortController();
 		containerAbortControllers.set(mermaidContainer, ac);
+
+		// Release drag-export thumbnail canvas when this container is re-enhanced
+		ac.signal.addEventListener("abort", () => {
+			const thumb = (mermaidContainer as unknown as Record<string, unknown>).__thumbCanvas as HTMLCanvasElement | undefined;
+			if (thumb) {
+				releaseCanvas(thumb);
+				delete (mermaidContainer as unknown as Record<string, unknown>).__thumbCanvas;
+			}
+		});
 
 		// Helper: resolve current SVG lazily to avoid stale references
 		const getCurrentSvg = () =>
@@ -178,6 +195,8 @@ function setupDragExport(
 				thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
 			}
 			cachedThumbCanvas = thumbCanvas;
+			// Store reference for cleanup on abort
+			(container as unknown as Record<string, unknown>).__thumbCanvas = thumbCanvas;
 
 			// Release the full-size canvas
 			releaseCanvas(canvas);

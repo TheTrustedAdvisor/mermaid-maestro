@@ -419,6 +419,9 @@ export class MermaidLightboxModal extends Modal {
 	// ─── Keyboard ─────────────────────────────────────────────────────────────
 
 	private onKeyDown(e: KeyboardEvent): void {
+		// Only handle keys when this modal is actually open
+		if (!this.containerEl.isConnected) return;
+
 		switch (e.key) {
 			case "+":
 			case "=":

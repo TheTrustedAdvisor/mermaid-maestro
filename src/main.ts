@@ -10,6 +10,7 @@ import { copyPngToClipboard, copyTextToClipboard } from "./utils/clipboard-utils
 import { rasterizeSvgToCanvas, releaseCanvas } from "./utils/render-utils";
 import { MermaidLightboxModal } from "./modules/lightbox";
 import { exportPdf } from "./modules/export/pdf-export";
+import { applyMermaidConfig, registerElkLayout } from "./modules/mermaid-config";
 
 export default class MermaidMaestroPlugin extends Plugin {
 	settings: MermaidMaestroSettings = DEFAULT_SETTINGS;
@@ -17,13 +18,23 @@ export default class MermaidMaestroPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		// Configure Mermaid engine (theme, maxEdges, ELK) before diagrams render.
+		// onLayoutReady fires after the workspace is set up but before most
+		// markdown views have rendered their Mermaid blocks.
+		this.app.workspace.onLayoutReady(async () => {
+			applyMermaidConfig(this.settings);
+			if (this.settings.elkEnabled) {
+				await registerElkLayout(this);
+			}
+		});
+
+		// Settings tab (before observer so it's available immediately)
+		this.addSettingTab(new MermaidMaestroSettingTab(this.app, this));
+
 		// Initialize global MutationObserver for Mermaid diagram detection.
 		// Note: registerMarkdownPostProcessor does NOT work for Mermaid —
 		// Obsidian renders Mermaid asynchronously outside the post-processor pipeline.
 		initMermaidObserver(this);
-
-		// Settings tab
-		this.addSettingTab(new MermaidMaestroSettingTab(this.app, this));
 	}
 
 	onunload() {
@@ -31,9 +42,15 @@ export default class MermaidMaestroPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-		// Clamp pngScale to valid range in case of manual data.json edits
+		const raw = (await this.loadData()) ?? {};
+		// Guard against prototype pollution from manually edited data.json
+		delete raw["__proto__"];
+		delete raw["constructor"];
+		delete raw["prototype"];
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+		// Clamp values to valid ranges in case of manual data.json edits
 		this.settings.pngScale = Math.max(1, Math.min(4, this.settings.pngScale));
+		this.settings.maxEdges = Math.max(1, Math.min(50000, this.settings.maxEdges));
 	}
 
 	async saveSettings() {

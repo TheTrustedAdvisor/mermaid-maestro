@@ -6,26 +6,33 @@ import type MermaidMaestroPlugin from "../main";
  */
 export function createToolbar(
 	wrapper: HTMLElement,
-	svg: SVGSVGElement,
+	_svg: SVGSVGElement,
 	mermaidContainer: HTMLElement,
 	plugin: MermaidMaestroPlugin
 ): HTMLElement {
 	const toolbar = wrapper.createDiv({ cls: "mermaid-oneinall-toolbar" });
 
+	// Lazy lookup avoids stale SVG references after Mermaid re-renders
+	const getCurrentSvg = () =>
+		mermaidContainer.querySelector("svg") as SVGSVGElement | null;
+
 	// Fullscreen / Lightbox
 	addToolbarButton(toolbar, "⛶", "Open in lightbox", () => {
-		plugin.openLightbox(svg);
+		const s = getCurrentSvg();
+		if (s) plugin.openLightbox(s);
 	});
 
 	// Export menu
 	addToolbarButton(toolbar, "📋", "Export options", () => {
+		const s = getCurrentSvg();
+		if (!s) return;
 		const rect = toolbar.getBoundingClientRect();
 		plugin.showContextMenu(
 			new MouseEvent("contextmenu", {
 				clientX: rect.left,
 				clientY: rect.bottom,
 			}),
-			svg,
+			s,
 			mermaidContainer
 		);
 	});

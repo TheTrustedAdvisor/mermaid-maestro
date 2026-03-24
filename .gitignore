@@ -1,5 +1,6 @@
 # Build output
 main.js
+elk-layout.js
 
 # Node
 node_modules/
