@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import type MermaidOneInAllPlugin from "./main";
+import type MermaidMaestroPlugin from "./main";
 
-export interface MermaidOneInAllSettings {
+export interface MermaidMaestroSettings {
 	autoFitEnabled: boolean;
 	lightboxEnabled: boolean;
 	contextMenuEnabled: boolean;
@@ -9,7 +9,7 @@ export interface MermaidOneInAllSettings {
 	pngScale: number;
 }
 
-export const DEFAULT_SETTINGS: MermaidOneInAllSettings = {
+export const DEFAULT_SETTINGS: MermaidMaestroSettings = {
 	autoFitEnabled: true,
 	lightboxEnabled: true,
 	contextMenuEnabled: true,
@@ -17,10 +17,10 @@ export const DEFAULT_SETTINGS: MermaidOneInAllSettings = {
 	pngScale: 2,
 };
 
-export class MermaidOneInAllSettingTab extends PluginSettingTab {
-	plugin: MermaidOneInAllPlugin;
+export class MermaidMaestroSettingTab extends PluginSettingTab {
+	plugin: MermaidMaestroPlugin;
 
-	constructor(app: App, plugin: MermaidOneInAllPlugin) {
+	constructor(app: App, plugin: MermaidMaestroPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -90,7 +90,7 @@ export class MermaidOneInAllSettingTab extends PluginSettingTab {
 					.addOption("4", "4x")
 					.setValue(String(this.plugin.settings.pngScale))
 					.onChange(async (value) => {
-						this.plugin.settings.pngScale = parseInt(value);
+						this.plugin.settings.pngScale = parseInt(value, 10);
 						await this.plugin.saveSettings();
 					})
 			);

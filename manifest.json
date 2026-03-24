@@ -1,9 +1,10 @@
 {
 	"id": "mermaid-maestro",
 	"name": "Mermaid Maestro",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"minAppVersion": "1.5.0",
-	"description": "All-in-one Mermaid enhancement: auto-fit, lightbox with pan/zoom, export to PNG/SVG/PDF, and context menu actions.",
-	"author": "mfalland",
+	"description": "Enhance Mermaid diagrams with auto-fit scaling, interactive lightbox with pan/zoom and minimap, one-click export to PNG/SVG/PDF, drag & drop, hover toolbar with theme toggle, and right-click context menu.",
+	"author": "Matthias Falland",
+	"authorUrl": "https://github.com/TheTrustedAdvisor",
 	"isDesktopOnly": false
 }

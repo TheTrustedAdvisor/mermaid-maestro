@@ -39,17 +39,27 @@ export function getSvgDimensions(svg: SVGSVGElement): { width: number; height: n
 	const h = parseFloat(svg.getAttribute("height") || "0");
 	if (w > 0 && h > 0) return { width: w, height: h };
 
-	const bbox = svg.getBBox();
-	return { width: bbox.width || 300, height: bbox.height || 200 };
+	try {
+		const bbox = svg.getBBox();
+		return { width: bbox.width || 300, height: bbox.height || 200 };
+	} catch {
+		// getBBox() throws on detached or hidden SVGs in some browsers
+		return { width: 300, height: 200 };
+	}
 }
 
 /**
  * Strip dangerous elements and event-handler attributes from an SVG node.
  * Prevents XSS when cloning untrusted SVG content.
+ *
+ * Note: do NOT remove <foreignObject> — Mermaid uses it for text labels.
+ * Instead, we sanitize its contents.
  */
 export function sanitizeSvg(svg: SVGSVGElement): void {
-	// Note: do NOT remove <foreignObject> — Mermaid uses it for text labels
-	const dangerousTags = ["script"];
+	const dangerousTags = [
+		"script", "iframe", "embed", "object", "meta", "link",
+		"animate", "set", "animateTransform",
+	];
 	for (const tag of dangerousTags) {
 		const els = svg.querySelectorAll(tag);
 		for (let i = els.length - 1; i >= 0; i--) {
@@ -57,19 +67,39 @@ export function sanitizeSvg(svg: SVGSVGElement): void {
 		}
 	}
 
-	const eventAttrs = [
-		"onload", "onclick", "onerror", "onmouseover",
-		"onmouseout", "onfocus", "onblur",
-	];
-	const allEls = svg.querySelectorAll("*");
-	for (const el of Array.from(allEls)) {
-		for (const attr of eventAttrs) {
-			el.removeAttribute(attr);
+	// Sanitize foreignObject contents: strip non-display elements
+	const foreignObjects = svg.querySelectorAll("foreignObject");
+	for (const fo of Array.from(foreignObjects)) {
+		const dangerous = fo.querySelectorAll(
+			"script, iframe, embed, object, form, input, textarea, button, a[href]"
+		);
+		for (let i = dangerous.length - 1; i >= 0; i--) {
+			dangerous[i].remove();
 		}
 	}
+
+	// Remove ALL on* event handler attributes dynamically (not a fixed list)
+	// and sanitize javascript: URLs in href/xlink:href
+	const allEls = svg.querySelectorAll("*");
+	for (const el of Array.from(allEls)) {
+		for (const attr of Array.from(el.attributes)) {
+			if (attr.name.toLowerCase().startsWith("on")) {
+				el.removeAttribute(attr.name);
+			}
+		}
+		for (const hrefAttr of ["href", "xlink:href"]) {
+			const val = el.getAttribute(hrefAttr);
+			if (val && /^\s*javascript\s*:/i.test(val)) {
+				el.removeAttribute(hrefAttr);
+			}
+		}
+	}
+
 	// Also sanitize the root element itself
-	for (const attr of eventAttrs) {
-		svg.removeAttribute(attr);
+	for (const attr of Array.from(svg.attributes)) {
+		if (attr.name.toLowerCase().startsWith("on")) {
+			svg.removeAttribute(attr.name);
+		}
 	}
 }
 
@@ -80,29 +110,33 @@ export function sanitizeSvg(svg: SVGSVGElement): void {
 export function cloneSvgWithStyles(svg: SVGSVGElement): SVGSVGElement {
 	const clone = svg.cloneNode(true) as SVGSVGElement;
 
-	// Sanitize the clone to remove dangerous elements/attributes
-	sanitizeSvg(clone);
-
-	// Copy computed styles to inline styles for all elements
+	// Copy computed styles to inline styles BEFORE sanitizing,
+	// so element indices stay aligned between original and clone.
 	const origElements = svg.querySelectorAll("*");
 	const cloneElements = clone.querySelectorAll("*");
 
 	for (let i = 0; i < origElements.length; i++) {
-		const origEl = origElements[i] as HTMLElement;
-		const cloneEl = cloneElements[i] as HTMLElement;
+		const origEl = origElements[i] as Element;
+		const cloneEl = cloneElements[i] as Element;
 		if (!origEl || !cloneEl) continue;
 
 		const computed = window.getComputedStyle(origEl);
+		const style = (cloneEl as HTMLElement).style;
+		if (!style) continue;
+
 		// Copy key visual properties
 		const props = ["fill", "stroke", "stroke-width", "font-family", "font-size",
 			"font-weight", "opacity", "color", "background-color"];
 		for (const prop of props) {
 			const value = computed.getPropertyValue(prop);
 			if (value) {
-				cloneEl.style.setProperty(prop, value);
+				style.setProperty(prop, value);
 			}
 		}
 	}
+
+	// Sanitize AFTER style copying to avoid index misalignment
+	sanitizeSvg(clone);
 
 	return clone;
 }

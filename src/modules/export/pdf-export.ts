@@ -1,6 +1,6 @@
 import { Notice, Platform } from "obsidian";
-import { cloneSvgWithStyles, serializeSvg, getSvgDimensions } from "../../utils/svg-utils";
-import { svgToBase64DataUrl } from "../../utils/clipboard-utils";
+import { getSvgDimensions } from "../../utils/svg-utils";
+import { rasterizeSvgToCanvas, releaseCanvas } from "../../utils/render-utils";
 
 /**
  * Export an SVG as PDF to the clipboard (macOS) or offer download as fallback.
@@ -11,35 +11,8 @@ export async function exportPdf(svg: SVGSVGElement, scale: number): Promise<void
 		// Dynamic import to keep initial bundle small
 		const { jsPDF } = await import("jspdf");
 
-		const clone = cloneSvgWithStyles(svg);
 		const dims = getSvgDimensions(svg);
-		const svgString = serializeSvg(clone);
-
-		// Use base64 data URL to avoid canvas tainting issues
-		const dataUrl = svgToBase64DataUrl(svgString);
-
-		const img = new Image();
-		await new Promise<void>((resolve, reject) => {
-			img.onload = () => resolve();
-			img.onerror = () => reject(new Error("Failed to load SVG for PDF export"));
-			img.src = dataUrl;
-		});
-
-		const canvasWidth = img.naturalWidth * scale;
-		const canvasHeight = img.naturalHeight * scale;
-
-		const canvas = document.createElement("canvas");
-		canvas.width = canvasWidth;
-		canvas.height = canvasHeight;
-
-		const ctx = canvas.getContext("2d");
-		if (!ctx) throw new Error("Could not get canvas context");
-
-		// White background for PDF
-		ctx.fillStyle = "#ffffff";
-		ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-		ctx.scale(scale, scale);
-		ctx.drawImage(img, 0, 0);
+		const canvas = await rasterizeSvgToCanvas(svg, scale, "white");
 
 		// Convert canvas to PNG data URL for jsPDF
 		const imgData = canvas.toDataURL("image/png", 1.0);
@@ -53,6 +26,9 @@ export async function exportPdf(svg: SVGSVGElement, scale: number): Promise<void
 		});
 
 		pdf.addImage(imgData, "PNG", 0, 0, dims.width, dims.height);
+
+		// Release canvas memory
+		releaseCanvas(canvas);
 
 		// Try to copy to clipboard (works on macOS via Electron)
 		const pdfBlob = pdf.output("blob");

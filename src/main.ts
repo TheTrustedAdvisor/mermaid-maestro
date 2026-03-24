@@ -1,22 +1,21 @@
 import { Menu, Notice, Platform, Plugin } from "obsidian";
 import {
 	DEFAULT_SETTINGS,
-	MermaidOneInAllSettingTab,
-	type MermaidOneInAllSettings,
+	MermaidMaestroSettingTab,
+	type MermaidMaestroSettings,
 } from "./settings";
 import { initMermaidObserver } from "./post-processor";
-import { cloneSvgWithStyles, serializeSvg, parseViewBox } from "./utils/svg-utils";
-import { copyPngToClipboard, copyTextToClipboard, svgToBase64DataUrl } from "./utils/clipboard-utils";
+import { cloneSvgWithStyles, serializeSvg, getSvgDimensions } from "./utils/svg-utils";
+import { copyPngToClipboard, copyTextToClipboard } from "./utils/clipboard-utils";
+import { rasterizeSvgToCanvas, releaseCanvas } from "./utils/render-utils";
 import { MermaidLightboxModal } from "./modules/lightbox";
 import { exportPdf } from "./modules/export/pdf-export";
 
-export default class MermaidOneInAllPlugin extends Plugin {
-	settings: MermaidOneInAllSettings = DEFAULT_SETTINGS;
+export default class MermaidMaestroPlugin extends Plugin {
+	settings: MermaidMaestroSettings = DEFAULT_SETTINGS;
 
 	async onload() {
 		await this.loadSettings();
-
-		console.log(`Mermaid Maestro v${this.manifest.version} loaded`);
 
 		// Initialize global MutationObserver for Mermaid diagram detection.
 		// Note: registerMarkdownPostProcessor does NOT work for Mermaid —
@@ -24,11 +23,17 @@ export default class MermaidOneInAllPlugin extends Plugin {
 		initMermaidObserver(this);
 
 		// Settings tab
-		this.addSettingTab(new MermaidOneInAllSettingTab(this.app, this));
+		this.addSettingTab(new MermaidMaestroSettingTab(this.app, this));
+	}
+
+	onunload() {
+		// Cleanup is handled by plugin.register() callbacks in post-processor
 	}
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// Clamp pngScale to valid range in case of manual data.json edits
+		this.settings.pngScale = Math.max(1, Math.min(4, this.settings.pngScale));
 	}
 
 	async saveSettings() {
@@ -92,55 +97,11 @@ export default class MermaidOneInAllPlugin extends Plugin {
 
 	/**
 	 * Export an SVG as PNG to the clipboard.
-	 * Uses base64 data URL to avoid canvas tainting with external SVG references.
+	 * Uses the shared rasterization utility with canvas size guard.
 	 */
 	private async exportPng(svg: SVGSVGElement, background: "transparent" | "white"): Promise<void> {
 		try {
-			const scale = this.settings.pngScale;
-
-			// Read the original viewBox — Mermaid sets this to cover the full diagram
-			const vb = parseViewBox(svg);
-			const vbW = vb ? vb.width : svg.getBBox().width;
-			const vbH = vb ? vb.height : svg.getBBox().height;
-
-			if (vbW <= 0 || vbH <= 0) {
-				new Notice("Cannot export: diagram has zero dimensions.");
-				return;
-			}
-
-			const clone = cloneSvgWithStyles(svg);
-
-			// Remove auto-fit CSS, keep viewBox unchanged, set width/height to
-			// the scaled target resolution so the browser rasterises vectors at
-			// full quality without needing ctx.scale() upscaling.
-			clone.removeAttribute("style");
-			clone.setAttribute("width", String(Math.ceil(vbW * scale)));
-			clone.setAttribute("height", String(Math.ceil(vbH * scale)));
-			clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
-			const svgString = serializeSvg(clone);
-			const dataUrl = svgToBase64DataUrl(svgString);
-
-			const img = new Image();
-			await new Promise<void>((resolve, reject) => {
-				img.onload = () => resolve();
-				img.onerror = () => reject(new Error("Failed to load SVG as image"));
-				img.src = dataUrl;
-			});
-
-			const canvas = document.createElement("canvas");
-			canvas.width = img.naturalWidth;
-			canvas.height = img.naturalHeight;
-
-			const ctx = canvas.getContext("2d");
-			if (!ctx) throw new Error("Could not get canvas context");
-
-			if (background === "white") {
-				ctx.fillStyle = "#ffffff";
-				ctx.fillRect(0, 0, canvas.width, canvas.height);
-			}
-
-			ctx.drawImage(img, 0, 0);
+			const canvas = await rasterizeSvgToCanvas(svg, this.settings.pngScale, background);
 
 			// Use Electron native clipboard via canvas data URL — most reliable
 			// path for large images on desktop (avoids Blob/Buffer truncation)
@@ -167,6 +128,7 @@ export default class MermaidOneInAllPlugin extends Plugin {
 				await copyPngToClipboard(blob);
 			}
 
+			releaseCanvas(canvas);
 			new Notice("PNG copied to clipboard!");
 		} catch (err) {
 			console.error("Mermaid Maestro: PNG export failed", err);
@@ -179,19 +141,17 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	 */
 	private async exportSvg(svg: SVGSVGElement): Promise<void> {
 		try {
-			const vb = parseViewBox(svg);
-			const vbW = vb ? vb.width : svg.getBBox().width;
-			const vbH = vb ? vb.height : svg.getBBox().height;
+			const dims = getSvgDimensions(svg);
 
-			if (vbW <= 0 || vbH <= 0) {
+			if (dims.width <= 0 || dims.height <= 0) {
 				new Notice("Cannot export: diagram has zero dimensions.");
 				return;
 			}
 
 			const clone = cloneSvgWithStyles(svg);
 			clone.removeAttribute("style");
-			clone.setAttribute("width", String(Math.ceil(vbW)));
-			clone.setAttribute("height", String(Math.ceil(vbH)));
+			clone.setAttribute("width", String(Math.ceil(dims.width)));
+			clone.setAttribute("height", String(Math.ceil(dims.height)));
 			const svgString = serializeSvg(clone);
 			await copyTextToClipboard(svgString);
 			new Notice("SVG copied to clipboard!");
@@ -207,8 +167,8 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	private async exportSource(mermaidContainer: HTMLElement): Promise<void> {
 		try {
 			const source =
-				mermaidContainer.getAttribute("data-mermaid-source") ||
-				mermaidContainer.getAttribute("data-source") ||
+				mermaidContainer.getAttribute("data-mermaid-source") ??
+				mermaidContainer.getAttribute("data-source") ??
 				this.extractSourceFromDom(mermaidContainer);
 
 			if (!source) {

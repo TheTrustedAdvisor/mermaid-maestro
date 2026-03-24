@@ -6,10 +6,6 @@ const MAX_ZOOM = 10;
 const ZOOM_STEP = 0.15;
 const PAN_STEP = 50;
 
-// Selector used to collect all Mermaid SVGs on the page for diagram navigation
-// Direct child selector — avoids matching nested SVGs inside Mermaid diagrams
-const MERMAID_SVG_SELECTOR = ".mermaid-oneinall-enhanced > svg";
-
 export class MermaidLightboxModal extends Modal {
 	private svg: SVGSVGElement;
 	private displaySvg: SVGSVGElement | null = null;
@@ -30,20 +26,11 @@ export class MermaidLightboxModal extends Modal {
 	private dragStartPanX = 0;
 	private dragStartPanY = 0;
 
-	// Diagram navigation state
-	private allSvgs: SVGSVGElement[] = [];
-	private currentIndex = 0;
-	private navPrevBtn: HTMLButtonElement | null = null;
-	private navNextBtn: HTMLButtonElement | null = null;
-	private navCounter: HTMLSpanElement | null = null;
-
 	// Minimap state
 	private minimapEl: HTMLDivElement | null = null;
 	private minimapSvgContainer: HTMLDivElement | null = null;
 	private minimapViewport: HTMLDivElement | null = null;
 	private minimapDragging = false;
-	private minimapDragStartX = 0;
-	private minimapDragStartY = 0;
 
 	// Bound handlers for cleanup
 	private boundOnKeyDown: (e: KeyboardEvent) => void;
@@ -73,70 +60,27 @@ export class MermaidLightboxModal extends Modal {
 		const isDark = document.body.classList.contains("theme-dark");
 		modalEl.addClass(isDark ? "mermaid-oneinall-lightbox-dark" : "mermaid-oneinall-lightbox-light");
 
-		// Collect all Mermaid SVGs on the page for navigation
-		this.allSvgs = Array.from(
-			document.querySelectorAll<SVGSVGElement>(MERMAID_SVG_SELECTOR)
-		).filter((s) => s.isConnected && s.childElementCount > 0);
-
-		// Find which index corresponds to the opened SVG
-		this.currentIndex = this.allSvgs.indexOf(this.svg);
-		if (this.currentIndex === -1) {
-			// Fallback: use only the passed SVG
-			this.allSvgs = [this.svg];
-			this.currentIndex = 0;
-		}
-
 		// Create container
 		this.container = contentEl.createDiv({ cls: "mermaid-oneinall-lightbox-container" });
 
-		// Load the initial diagram
+		// Load the diagram
 		this.loadDiagram(this.svg);
 
-		// Zoom indicator with diagram counter
+		// Zoom indicator
 		const indicatorBar = contentEl.createDiv({ cls: "mermaid-oneinall-indicator-bar" });
 		this.zoomIndicator = indicatorBar.createDiv({ cls: "mermaid-oneinall-zoom-indicator" });
-		this.navCounter = indicatorBar.createEl("span", { cls: "mermaid-oneinall-nav-counter" });
 		this.updateZoomIndicator();
-		this.updateNavCounter();
-
-		// Navigation buttons (only render if >1 diagram)
-		if (this.allSvgs.length > 1) {
-			this.navPrevBtn = contentEl.createEl("button", {
-				cls: "mermaid-oneinall-nav-btn mermaid-oneinall-nav-prev",
-				text: "◀",
-				title: "Previous diagram (Shift+←)",
-			});
-			this.navPrevBtn.addEventListener("click", (e) => {
-				e.stopPropagation();
-				this.navigateDiagram(-1);
-			});
-
-			this.navNextBtn = contentEl.createEl("button", {
-				cls: "mermaid-oneinall-nav-btn mermaid-oneinall-nav-next",
-				text: "▶",
-				title: "Next diagram (Shift+→)",
-			});
-			this.navNextBtn.addEventListener("click", (e) => {
-				e.stopPropagation();
-				this.navigateDiagram(1);
-			});
-		}
 
 		// Minimap
 		this.buildMinimap(contentEl);
 
 		// Usage hint (fades out after first interaction)
 		this.hintEl = contentEl.createDiv({ cls: "mermaid-oneinall-hint" });
-		this.hintEl.textContent =
-			"Scroll to zoom · Drag to pan · Double-click to fit · R to reset" +
-			(this.allSvgs.length > 1 ? " · Shift+← / Shift+→ for diagrams" : "");
+		this.hintEl.textContent = "Scroll to zoom \u00b7 Drag to pan \u00b7 Double-click to fit \u00b7 R to reset";
 
 		// Register event listeners
 		this.registerMouseEvents();
 		document.addEventListener("keydown", this.boundOnKeyDown);
-
-		// Disable nav buttons appropriately on initial open
-		this.updateNavButtons();
 	}
 
 	onClose() {
@@ -148,25 +92,12 @@ export class MermaidLightboxModal extends Modal {
 		this.container = null;
 		this.zoomIndicator = null;
 		this.hintEl = null;
-		this.navPrevBtn = null;
-		this.navNextBtn = null;
-		this.navCounter = null;
 		this.minimapEl = null;
 		this.minimapSvgContainer = null;
 		this.minimapViewport = null;
 	}
 
-	// ─── Diagram navigation ───────────────────────────────────────────────────
-
-	private navigateDiagram(direction: -1 | 1): void {
-		const next = this.currentIndex + direction;
-		if (next < 0 || next >= this.allSvgs.length) return;
-		this.currentIndex = next;
-		this.svg = this.allSvgs[this.currentIndex];
-		this.loadDiagram(this.svg);
-		this.updateNavCounter();
-		this.updateNavButtons();
-	}
+	// ─── Diagram Loading ─────────────────────────────────────────────────────
 
 	private loadDiagram(src: SVGSVGElement): void {
 		if (!this.container) return;
@@ -199,26 +130,6 @@ export class MermaidLightboxModal extends Modal {
 		this.resetView();
 	}
 
-	private updateNavCounter(): void {
-		if (this.navCounter) {
-			if (this.allSvgs.length > 1) {
-				this.navCounter.textContent = `${this.currentIndex + 1} / ${this.allSvgs.length}`;
-				this.navCounter.style.display = "inline";
-			} else {
-				this.navCounter.style.display = "none";
-			}
-		}
-	}
-
-	private updateNavButtons(): void {
-		if (this.navPrevBtn) {
-			this.navPrevBtn.disabled = this.currentIndex === 0;
-		}
-		if (this.navNextBtn) {
-			this.navNextBtn.disabled = this.currentIndex === this.allSvgs.length - 1;
-		}
-	}
-
 	// ─── Minimap ──────────────────────────────────────────────────────────────
 
 	private buildMinimap(contentEl: HTMLElement): void {
@@ -241,8 +152,6 @@ export class MermaidLightboxModal extends Modal {
 			e.stopPropagation();
 			e.preventDefault();
 			this.minimapDragging = true;
-			this.minimapDragStartX = e.clientX;
-			this.minimapDragStartY = e.clientY;
 			this.minimapJumpTo(e.clientX, e.clientY);
 		});
 
@@ -424,10 +333,11 @@ export class MermaidLightboxModal extends Modal {
 					return;
 				}
 				const scale = newDistance / lastTouchDistance;
-
-				this.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * scale));
+				const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+				const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+				const delta = this.zoom * (scale - 1);
 				lastTouchDistance = newDistance;
-				this.applyTransform();
+				this.zoomAt(midX, midY, delta);
 			}
 			e.preventDefault();
 		}, { passive: false });
@@ -509,26 +419,23 @@ export class MermaidLightboxModal extends Modal {
 	// ─── Keyboard ─────────────────────────────────────────────────────────────
 
 	private onKeyDown(e: KeyboardEvent): void {
-		// Shift+Arrow: diagram navigation
-		if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-			e.preventDefault();
-			this.navigateDiagram(e.key === "ArrowLeft" ? -1 : 1);
-			return;
-		}
-
 		switch (e.key) {
 			case "+":
 			case "=":
 				e.preventDefault();
 				this.hideHint();
-				this.zoom = Math.min(MAX_ZOOM, this.zoom + ZOOM_STEP);
-				this.applyTransform();
+				if (this.container) {
+					const rect = this.container.getBoundingClientRect();
+					this.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, ZOOM_STEP);
+				}
 				break;
 			case "-":
 				e.preventDefault();
 				this.hideHint();
-				this.zoom = Math.max(MIN_ZOOM, this.zoom - ZOOM_STEP);
-				this.applyTransform();
+				if (this.container) {
+					const rect = this.container.getBoundingClientRect();
+					this.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, -ZOOM_STEP);
+				}
 				break;
 			case "ArrowLeft":
 				e.preventDefault();

@@ -1,13 +1,15 @@
-import type MermaidOneInAllPlugin from "./main";
+import type MermaidMaestroPlugin from "./main";
 import { applyAutoFit } from "./modules/auto-fit";
 import { createToolbar } from "./modules/toolbar";
-import { cloneSvgWithStyles, serializeSvg, parseViewBox, sanitizeSvg } from "./utils/svg-utils";
-import { svgToBase64DataUrl } from "./utils/clipboard-utils";
+import { rasterizeSvgToCanvas, releaseCanvas } from "./utils/render-utils";
 
 const ENHANCED_CLASS = "mermaid-oneinall-enhanced";
 
 // WeakSet prevents memory leaks — entries are GC'd when DOM nodes are removed
 const processedSvgs = new WeakSet<SVGSVGElement>();
+
+// AbortControllers for event listener cleanup on re-enhancement
+const containerAbortControllers = new WeakMap<HTMLElement, AbortController>();
 
 /**
  * Initialize Mermaid diagram detection using a global MutationObserver.
@@ -18,16 +20,18 @@ const processedSvgs = new WeakSet<SVGSVGElement>();
  * elements containing Mermaid SVGs. All successful Mermaid plugins use
  * a MutationObserver on document.body instead.
  */
-export function initMermaidObserver(plugin: MermaidOneInAllPlugin): void {
+export function initMermaidObserver(plugin: MermaidMaestroPlugin): void {
 	let debounceTimer: number | null = null;
 
-	const observer = new MutationObserver(() => {
+	const debouncedScan = () => {
 		if (debounceTimer !== null) window.clearTimeout(debounceTimer);
 		debounceTimer = window.setTimeout(() => {
 			debounceTimer = null;
 			scanAndEnhance(plugin);
 		}, 150);
-	});
+	};
+
+	const observer = new MutationObserver(debouncedScan);
 
 	observer.observe(document.body, { childList: true, subtree: true });
 
@@ -37,18 +41,17 @@ export function initMermaidObserver(plugin: MermaidOneInAllPlugin): void {
 		if (debounceTimer !== null) window.clearTimeout(debounceTimer);
 	});
 
-	// Also scan on layout changes and file opens (with slight delay)
+	// Also scan on layout changes (routed through same debounce)
 	plugin.registerEvent(
-		plugin.app.workspace.on("layout-change", () => {
-			setTimeout(() => scanAndEnhance(plugin), 300);
-		})
+		plugin.app.workspace.on("layout-change", debouncedScan)
 	);
 
 	// Initial scan after a short delay to catch already-rendered diagrams
-	setTimeout(() => scanAndEnhance(plugin), 500);
+	const initTimer = window.setTimeout(() => scanAndEnhance(plugin), 500);
+	plugin.register(() => window.clearTimeout(initTimer));
 }
 
-function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
+function scanAndEnhance(plugin: MermaidMaestroPlugin): void {
 	const svgs = document.querySelectorAll<SVGSVGElement>(
 		".mermaid svg, pre.mermaid svg, svg[id^='mermaid-']"
 	);
@@ -63,9 +66,10 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
 		// Skip disconnected nodes
 		if (!svg.isConnected) continue;
 
-		// Skip if already enhanced — but re-enhance if the SVG inside changed
-		const mermaidContainer = svg.closest(".mermaid") as HTMLElement | null;
-		if (!mermaidContainer) continue;
+		// Find the Mermaid container
+		const mermaidContainer = svg.closest(".mermaid");
+		if (!(mermaidContainer instanceof HTMLElement)) continue;
+
 		if (mermaidContainer.classList.contains(ENHANCED_CLASS)) {
 			// Check if the SVG is new (re-rendered by Obsidian)
 			if (!processedSvgs.has(svg)) {
@@ -78,6 +82,16 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
 		processedSvgs.add(svg);
 		mermaidContainer.classList.add(ENHANCED_CLASS);
 
+		// Abort previous listeners on this container (handles re-enhancement)
+		const prevAc = containerAbortControllers.get(mermaidContainer);
+		if (prevAc) prevAc.abort();
+		const ac = new AbortController();
+		containerAbortControllers.set(mermaidContainer, ac);
+
+		// Helper: resolve current SVG lazily to avoid stale references
+		const getCurrentSvg = () =>
+			mermaidContainer.querySelector("svg") as SVGSVGElement | null;
+
 		// Apply auto-fit
 		if (plugin.settings.autoFitEnabled) {
 			applyAutoFit(svg);
@@ -88,10 +102,12 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
 			mermaidContainer.style.cursor = "pointer";
 			mermaidContainer.addEventListener("click", (e) => {
 				if (window.getSelection()?.toString()) return;
+				const s = getCurrentSvg();
+				if (!s) return;
 				e.preventDefault();
 				e.stopPropagation();
-				plugin.openLightbox(svg);
-			});
+				plugin.openLightbox(s);
+			}, { signal: ac.signal });
 		}
 
 		// Add hover toolbar
@@ -102,15 +118,16 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
 		// Register context menu
 		if (plugin.settings.contextMenuEnabled) {
 			mermaidContainer.addEventListener("contextmenu", (e) => {
+				const s = getCurrentSvg();
+				if (!s) return;
 				e.preventDefault();
 				e.stopPropagation();
-				plugin.showContextMenu(e, svg, mermaidContainer);
-			});
+				plugin.showContextMenu(e, s, mermaidContainer);
+			}, { signal: ac.signal });
 		}
 
-		// Drag & drop export: make the container draggable so users can drag
-		// the diagram as a PNG into other applications.
-		setupDragExport(mermaidContainer, svg, plugin);
+		// Drag & drop export
+		setupDragExport(mermaidContainer, ac, plugin);
 	}
 }
 
@@ -118,91 +135,68 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
  * Make a Mermaid container draggable, exporting the SVG as PNG on drag start.
  * Pre-renders the PNG on mouseenter so that the synchronous dragstart handler
  * can set dataTransfer without awaiting async operations.
+ *
+ * Cache persists across hover cycles and is only invalidated on re-enhancement
+ * (via AbortController).
  */
 function setupDragExport(
 	container: HTMLElement,
-	svg: SVGSVGElement,
-	plugin: MermaidOneInAllPlugin
+	ac: AbortController,
+	plugin: MermaidMaestroPlugin
 ): void {
 	container.setAttribute("draggable", "true");
 
 	let cachedPngDataUrl: string | null = null;
 	let cachedThumbCanvas: HTMLCanvasElement | null = null;
-	let cacheTimer: number | null = null;
+	let renderInProgress = false;
 
-	const preRenderPng = () => {
-		// Debounce: avoid re-rendering on rapid mouse events
-		if (cacheTimer !== null) return;
-		if (cachedPngDataUrl) return;
+	// Helper: resolve current SVG lazily
+	const getCurrentSvg = () =>
+		container.querySelector("svg") as SVGSVGElement | null;
 
-		cacheTimer = window.setTimeout(async () => {
-			cacheTimer = null;
-			try {
-				const scale = plugin.settings.pngScale;
-				const vb = parseViewBox(svg);
-				const vbW = vb ? vb.width : svg.getBBox().width;
-				const vbH = vb ? vb.height : svg.getBBox().height;
+	const preRenderPng = async () => {
+		if (renderInProgress || cachedPngDataUrl) return;
+		renderInProgress = true;
 
-				if (vbW <= 0 || vbH <= 0) return;
+		try {
+			const svg = getCurrentSvg();
+			if (!svg || !svg.isConnected) return;
 
-				const clone = cloneSvgWithStyles(svg);
-				clone.removeAttribute("style");
-				clone.setAttribute("width", String(Math.ceil(vbW * scale)));
-				clone.setAttribute("height", String(Math.ceil(vbH * scale)));
-				clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+			// Cap drag preview at 2x for performance
+			const scale = Math.min(2, plugin.settings.pngScale);
+			const canvas = await rasterizeSvgToCanvas(svg, scale);
 
-				const svgString = serializeSvg(clone);
-				const dataUrl = svgToBase64DataUrl(svgString);
+			cachedPngDataUrl = canvas.toDataURL("image/png");
 
-				const img = new Image();
-				await new Promise<void>((resolve, reject) => {
-					img.onload = () => resolve();
-					img.onerror = () => reject(new Error("Failed to load SVG as image"));
-					img.src = dataUrl;
-				});
-
-				const canvas = document.createElement("canvas");
-				canvas.width = img.naturalWidth;
-				canvas.height = img.naturalHeight;
-				const ctx = canvas.getContext("2d");
-				if (!ctx) return;
-				ctx.drawImage(img, 0, 0);
-
-				cachedPngDataUrl = canvas.toDataURL("image/png");
-
-				// Build thumbnail for drag image
-				const thumbCanvas = document.createElement("canvas");
-				const thumbScale = Math.min(1, 200 / Math.max(canvas.width, canvas.height));
-				thumbCanvas.width = Math.ceil(canvas.width * thumbScale);
-				thumbCanvas.height = Math.ceil(canvas.height * thumbScale);
-				const thumbCtx = thumbCanvas.getContext("2d");
-				if (thumbCtx) {
-					thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-				}
-				cachedThumbCanvas = thumbCanvas;
-			} catch (err) {
-				console.error("Mermaid Maestro: pre-render failed", err);
+			// Build thumbnail for drag image
+			const thumbCanvas = document.createElement("canvas");
+			const thumbScale = Math.min(1, 200 / Math.max(canvas.width, canvas.height));
+			thumbCanvas.width = Math.ceil(canvas.width * thumbScale);
+			thumbCanvas.height = Math.ceil(canvas.height * thumbScale);
+			const thumbCtx = thumbCanvas.getContext("2d");
+			if (thumbCtx) {
+				thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
 			}
-		}, 100);
+			cachedThumbCanvas = thumbCanvas;
+
+			// Release the full-size canvas
+			releaseCanvas(canvas);
+		} catch (err) {
+			console.error("Mermaid Maestro: pre-render failed", err);
+		} finally {
+			renderInProgress = false;
+		}
 	};
 
-	container.addEventListener("mouseenter", preRenderPng);
-
-	// Invalidate cache when SVG might change
-	container.addEventListener("mouseleave", () => {
-		cachedPngDataUrl = null;
-		cachedThumbCanvas = null;
-		if (cacheTimer !== null) {
-			window.clearTimeout(cacheTimer);
-			cacheTimer = null;
-		}
-	});
+	container.addEventListener("mouseenter", () => {
+		void preRenderPng();
+	}, { signal: ac.signal });
 
 	container.addEventListener("dragstart", (e: DragEvent) => {
 		if (!e.dataTransfer) return;
 
 		if (!cachedPngDataUrl) {
-			// Fallback: if pre-render hasn't finished, cancel the drag
+			// Pre-render hasn't finished, cancel the drag
 			e.preventDefault();
 			return;
 		}
@@ -218,5 +212,5 @@ function setupDragExport(
 		e.dataTransfer.setData("text/uri-list", cachedPngDataUrl);
 		e.dataTransfer.setData("text/plain", cachedPngDataUrl);
 		e.dataTransfer.effectAllowed = "copy";
-	});
+	}, { signal: ac.signal });
 }

@@ -1,4 +1,4 @@
-import type MermaidOneInAllPlugin from "../main";
+import type MermaidMaestroPlugin from "../main";
 
 /**
  * Create a hover toolbar for a Mermaid diagram.
@@ -8,7 +8,7 @@ export function createToolbar(
 	wrapper: HTMLElement,
 	svg: SVGSVGElement,
 	mermaidContainer: HTMLElement,
-	plugin: MermaidOneInAllPlugin
+	plugin: MermaidMaestroPlugin
 ): HTMLElement {
 	const toolbar = wrapper.createDiv({ cls: "mermaid-oneinall-toolbar" });
 

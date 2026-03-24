@@ -101,57 +101,6 @@
 	opacity: 0.8;
 }
 
-/* Diagram counter "2 / 5" */
-.mermaid-oneinall-nav-counter {
-	background: var(--background-secondary);
-	color: var(--text-muted);
-	padding: 4px 10px;
-	border-radius: 4px;
-	font-size: 12px;
-	font-family: var(--font-monospace);
-	opacity: 0.8;
-}
-
-/* Prev / Next diagram navigation buttons */
-.mermaid-oneinall-nav-btn {
-	position: absolute;
-	top: 50%;
-	transform: translateY(-50%);
-	background: var(--background-secondary);
-	color: var(--text-normal);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 50%;
-	width: 40px;
-	height: 40px;
-	font-size: 16px;
-	cursor: pointer;
-	opacity: 0.7;
-	transition: opacity 0.2s ease, background 0.2s ease;
-	z-index: 15;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 0;
-}
-
-.mermaid-oneinall-nav-btn:hover {
-	opacity: 1;
-	background: var(--background-modifier-hover);
-}
-
-.mermaid-oneinall-nav-btn:disabled {
-	opacity: 0.2;
-	cursor: not-allowed;
-}
-
-.mermaid-oneinall-nav-prev {
-	left: 12px;
-}
-
-.mermaid-oneinall-nav-next {
-	right: 12px;
-}
-
 /* ─── Minimap ─── */
 
 .mermaid-oneinall-minimap {
