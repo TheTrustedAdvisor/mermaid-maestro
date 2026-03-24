@@ -48,7 +48,8 @@ export function getSvgDimensions(svg: SVGSVGElement): { width: number; height: n
  * Prevents XSS when cloning untrusted SVG content.
  */
 export function sanitizeSvg(svg: SVGSVGElement): void {
-	const dangerousTags = ["script", "foreignObject"];
+	// Note: do NOT remove <foreignObject> — Mermaid uses it for text labels
+	const dangerousTags = ["script"];
 	for (const tag of dangerousTags) {
 		const els = svg.querySelectorAll(tag);
 		for (let i = els.length - 1; i >= 0; i--) {
