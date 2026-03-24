@@ -1,5 +1,5 @@
 import { App, Modal } from "obsidian";
-import { parseViewBox, setViewBox, sanitizeSvg, type ViewBox } from "../utils/svg-utils";
+import { parseViewBox, setViewBox, sanitizeSvg, cloneSvgWithStyles, type ViewBox } from "../utils/svg-utils";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
@@ -105,9 +105,8 @@ export class MermaidLightboxModal extends Modal {
 		// Remove previous SVG
 		this.container.empty();
 
-		// Clone the SVG and sanitize it
-		this.displaySvg = src.cloneNode(true) as SVGSVGElement;
-		sanitizeSvg(this.displaySvg);
+		// Clone with resolved styles so the lightbox renders identically
+		this.displaySvg = cloneSvgWithStyles(src);
 
 		// Read and store the original viewBox
 		this.originalViewBox = parseViewBox(this.displaySvg);

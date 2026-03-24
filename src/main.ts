@@ -1,4 +1,4 @@
-import { Menu, Notice, Platform, Plugin } from "obsidian";
+import { Menu, Notice, normalizePath, Platform, Plugin } from "obsidian";
 import {
 	DEFAULT_SETTINGS,
 	MermaidMaestroSettingTab,
@@ -109,6 +109,22 @@ export default class MermaidMaestroPlugin extends Plugin {
 				.onClick(() => this.exportSource(mermaidContainer))
 		);
 
+		menu.addSeparator();
+
+		menu.addItem((item) =>
+			item
+				.setTitle("Save as PNG file")
+				.setIcon("download")
+				.onClick(() => this.savePngToVault(svg))
+		);
+
+		menu.addItem((item) =>
+			item
+				.setTitle("Save as SVG file")
+				.setIcon("download")
+				.onClick(() => this.saveSvgToVault(svg))
+		);
+
 		menu.showAtMouseEvent(event);
 	}
 
@@ -199,6 +215,79 @@ export default class MermaidMaestroPlugin extends Plugin {
 			console.error("Mermaid Maestro: Source export failed", err);
 			new Notice(`Source export failed: ${err instanceof Error ? err.message : "Unknown error"}`);
 		}
+	}
+
+	/**
+	 * Save a PNG of the diagram to the vault export folder.
+	 */
+	private async savePngToVault(svg: SVGSVGElement): Promise<void> {
+		try {
+			const canvas = await rasterizeSvgToCanvas(svg, this.settings.pngScale, "white");
+			const blob = await new Promise<Blob>((resolve, reject) => {
+				canvas.toBlob(
+					(b) => (b ? resolve(b) : reject(new Error("Canvas toBlob failed"))),
+					"image/png"
+				);
+			});
+			releaseCanvas(canvas);
+
+			const buffer = await blob.arrayBuffer();
+			const path = await this.getExportPath("png");
+			await this.app.vault.adapter.writeBinary(path, buffer);
+			new Notice(`PNG saved to ${path}`);
+		} catch (err) {
+			console.error("Mermaid Maestro: PNG save failed", err);
+			new Notice(`PNG save failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+		}
+	}
+
+	/**
+	 * Save an SVG of the diagram to the vault export folder.
+	 */
+	private async saveSvgToVault(svg: SVGSVGElement): Promise<void> {
+		try {
+			const dims = getSvgDimensions(svg);
+			if (dims.width <= 0 || dims.height <= 0) {
+				new Notice("Cannot export: diagram has zero dimensions.");
+				return;
+			}
+
+			const clone = cloneSvgWithStyles(svg);
+			clone.removeAttribute("style");
+			clone.setAttribute("width", String(Math.ceil(dims.width)));
+			clone.setAttribute("height", String(Math.ceil(dims.height)));
+			const svgString = serializeSvg(clone);
+
+			const path = await this.getExportPath("svg");
+			await this.app.vault.adapter.write(path, svgString);
+			new Notice(`SVG saved to ${path}`);
+		} catch (err) {
+			console.error("Mermaid Maestro: SVG save failed", err);
+			new Notice(`SVG save failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+		}
+	}
+
+	/**
+	 * Generate a unique file path in the export folder.
+	 * Creates the folder if it doesn't exist yet.
+	 */
+	private exportCounter = 0;
+
+	private async getExportPath(ext: string): Promise<string> {
+		const folder = normalizePath(this.settings.exportFolder);
+
+		// Reject paths that attempt to escape the vault root
+		if (folder.startsWith("..") || folder.includes("/..") || folder.startsWith("/")) {
+			throw new Error("Export folder must be a relative path within the vault.");
+		}
+
+		if (!(await this.app.vault.adapter.exists(folder))) {
+			await this.app.vault.adapter.mkdir(folder);
+		}
+
+		const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+		const suffix = String(this.exportCounter++).padStart(3, "0");
+		return normalizePath(`${folder}/mermaid-${timestamp}-${suffix}.${ext}`);
 	}
 
 	/**

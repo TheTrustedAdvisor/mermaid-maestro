@@ -81,6 +81,19 @@ function scanAndEnhance(plugin: MermaidMaestroPlugin): void {
 		const mermaidContainer = svg.closest(".mermaid");
 		if (!(mermaidContainer instanceof HTMLElement)) continue;
 
+		// Detect Mermaid error states — don't enhance error output
+		const svgText = svg.textContent ?? "";
+		const isError =
+			mermaidContainer.classList.contains("mermaid-error") ||
+			mermaidContainer.hasAttribute("data-error") ||
+			svg.querySelector(".error-icon, .error-text") !== null ||
+			/syntax error|parse error/i.test(svgText);
+		if (isError) {
+			processedSvgs.add(svg);
+			mermaidContainer.classList.add("mermaid-oneinall-error");
+			continue;
+		}
+
 		// If container was already enhanced but SVG is new (re-rendered),
 		// reset so we re-attach listeners to the fresh SVG.
 		if (mermaidContainer.classList.contains(ENHANCED_CLASS)) {
@@ -90,9 +103,10 @@ function scanAndEnhance(plugin: MermaidMaestroPlugin): void {
 		processedSvgs.add(svg);
 		mermaidContainer.classList.add(ENHANCED_CLASS);
 
-		// Abort previous listeners on this container (handles re-enhancement)
+		// Abort previous listeners and remove old toolbars (handles re-enhancement)
 		const prevAc = containerAbortControllers.get(mermaidContainer);
 		if (prevAc) prevAc.abort();
+		mermaidContainer.querySelectorAll(".mermaid-oneinall-toolbar").forEach(el => el.remove());
 		const ac = new AbortController();
 		containerAbortControllers.set(mermaidContainer, ac);
 

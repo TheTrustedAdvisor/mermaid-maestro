@@ -94,8 +94,8 @@ export function sanitizeSvg(svg: SVGSVGElement): void {
 			if (/^\s*javascript\s*:/i.test(val)) {
 				el.removeAttribute(hrefAttr);
 			}
-			// Block data: URIs except safe image types used by Mermaid
-			if (/^\s*data\s*:/i.test(val) && !/^\s*data:image\/(png|jpeg|gif|svg\+xml|webp)[;,]/i.test(val)) {
+			// Block data: URIs except safe raster image types used by Mermaid
+			if (/^\s*data\s*:/i.test(val) && !/^\s*data:image\/(png|jpeg|gif|webp)[;,]/i.test(val)) {
 				el.removeAttribute(hrefAttr);
 			}
 		}
@@ -110,8 +110,46 @@ export function sanitizeSvg(svg: SVGSVGElement): void {
 }
 
 /**
- * Clone an SVG element with all inline styles resolved.
- * This ensures the clone looks correct when detached from the DOM.
+ * SVG-relevant CSS properties that affect visual rendering.
+ * Covers geometry, painting, text, markers, transforms, and visibility.
+ * This list is comprehensive for Mermaid diagrams — intentionally broader
+ * than the minimal set to ensure exported SVGs look identical to in-app.
+ */
+const SVG_VISUAL_PROPERTIES = [
+	// Paint & color
+	"fill", "fill-opacity", "fill-rule", "stroke", "stroke-width",
+	"stroke-dasharray", "stroke-dashoffset", "stroke-linecap",
+	"stroke-linejoin", "stroke-miterlimit", "stroke-opacity",
+	"opacity", "color", "background-color",
+	// Text
+	"font-family", "font-size", "font-weight", "font-style",
+	"font-variant", "text-anchor", "dominant-baseline",
+	"text-decoration", "letter-spacing", "word-spacing",
+	"line-height", "white-space", "direction", "writing-mode",
+	// Markers (arrowheads)
+	"marker-start", "marker-mid", "marker-end",
+	// Layout & transform
+	"transform", "transform-origin", "visibility", "display",
+	// Effects
+	"filter", "clip-path", "clip-rule", "mask",
+	// Cursor & pointer (strip for export)
+	// "cursor", "pointer-events" — intentionally omitted
+];
+
+/** Properties where "none" is the default and should not be inlined. */
+const SKIP_NONE_PROPS = new Set([
+	"filter", "clip-path", "mask", "transform",
+	"marker-start", "marker-mid", "marker-end",
+	"stroke-dasharray", "text-decoration", "clip-rule",
+]);
+
+/**
+ * Clone an SVG element with all visual styles resolved to inline attributes.
+ * This ensures the clone looks correct when detached from the DOM (export).
+ *
+ * Copies all SVG-relevant computed styles so that CSS-variable-based themes,
+ * inherited stylesheet rules, and Mermaid's internal <style> blocks are
+ * baked into inline styles. This makes the SVG self-contained.
  */
 export function cloneSvgWithStyles(svg: SVGSVGElement): SVGSVGElement {
 	const clone = svg.cloneNode(true) as SVGSVGElement;
@@ -121,7 +159,14 @@ export function cloneSvgWithStyles(svg: SVGSVGElement): SVGSVGElement {
 	const origElements = svg.querySelectorAll("*");
 	const cloneElements = clone.querySelectorAll("*");
 
-	for (let i = 0; i < origElements.length; i++) {
+	// Cap element count to prevent UI freeze on very large diagrams
+	const MAX_STYLE_ELEMENTS = 10_000;
+	const count = Math.min(origElements.length, MAX_STYLE_ELEMENTS);
+	if (origElements.length > MAX_STYLE_ELEMENTS) {
+		console.warn(`Mermaid Maestro: Style inlining capped at ${MAX_STYLE_ELEMENTS} elements (diagram has ${origElements.length}).`);
+	}
+
+	for (let i = 0; i < count; i++) {
 		const origEl = origElements[i] as Element;
 		const cloneEl = cloneElements[i] as Element;
 		if (!origEl || !cloneEl) continue;
@@ -130,16 +175,24 @@ export function cloneSvgWithStyles(svg: SVGSVGElement): SVGSVGElement {
 		const style = (cloneEl as HTMLElement).style;
 		if (!style) continue;
 
-		// Copy key visual properties
-		const props = ["fill", "stroke", "stroke-width", "stroke-dasharray",
-			"stroke-linecap", "stroke-linejoin", "font-family", "font-size",
-			"font-weight", "opacity", "color", "background-color",
-			"text-anchor", "dominant-baseline", "text-decoration"];
-		for (const prop of props) {
+		for (const prop of SVG_VISUAL_PROPERTIES) {
 			const value = computed.getPropertyValue(prop);
-			if (value) {
-				style.setProperty(prop, value);
-			}
+			if (!value) continue;
+			if (value === "none" && SKIP_NONE_PROPS.has(prop)) continue;
+			style.setProperty(prop, value);
+		}
+	}
+
+	// Strip class-based rules from internal <style> blocks (now inlined),
+	// but preserve @keyframes and @font-face which cannot be inlined.
+	const internalStyles = clone.querySelectorAll("style");
+	for (const styleEl of Array.from(internalStyles)) {
+		const text = styleEl.textContent || "";
+		const atRules = text.match(/@(keyframes|font-face)\s+[^{]*\{[^}]*(\{[^}]*\})*[^}]*\}/g);
+		if (atRules && atRules.length > 0) {
+			styleEl.textContent = atRules.join("\n");
+		} else {
+			styleEl.remove();
 		}
 	}
 

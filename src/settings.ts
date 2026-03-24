@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, normalizePath, PluginSettingTab, Setting } from "obsidian";
 import type MermaidMaestroPlugin from "./main";
 import { detectMermaidVersion } from "./modules/mermaid-config";
 
@@ -10,6 +10,7 @@ export interface MermaidMaestroSettings {
 	contextMenuEnabled: boolean;
 	toolbarEnabled: boolean;
 	pngScale: number;
+	exportFolder: string;
 	// Mermaid engine settings
 	elkEnabled: boolean;
 	maxEdges: number;
@@ -22,6 +23,7 @@ export const DEFAULT_SETTINGS: MermaidMaestroSettings = {
 	contextMenuEnabled: true,
 	toolbarEnabled: true,
 	pngScale: 2,
+	exportFolder: "mermaid-exports",
 	elkEnabled: false,
 	maxEdges: 500,
 	defaultTheme: "default",
@@ -107,6 +109,27 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 					.setValue(String(this.plugin.settings.pngScale))
 					.onChange(async (value) => {
 						this.plugin.settings.pngScale = parseInt(value, 10);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Export Folder")
+			.setDesc(
+				"Folder inside the vault for 'Save as file' exports. " +
+				"Created automatically when first used."
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("mermaid-exports")
+					.setValue(this.plugin.settings.exportFolder)
+					.onChange(async (value) => {
+						const folder = normalizePath(value.trim() || "mermaid-exports");
+						if (folder.startsWith("..") || folder.includes("/..") || folder.startsWith("/")) {
+							new Notice("Export folder must be a relative path inside the vault.");
+							return;
+						}
+						this.plugin.settings.exportFolder = folder;
 						await this.plugin.saveSettings();
 					})
 			);
