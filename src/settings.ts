@@ -99,7 +99,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("PNG export scale")
-			.setDesc("Resolution multiplier for PNG export (2x recommended for high-DPI displays).")
+			.setDesc("Resolution multiplier for PNG export (2x recommended for high-resolution displays).")
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("1", "1x")
@@ -121,7 +121,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			)
 			.addText((text) =>
 				text
-					.setPlaceholder("mermaid-exports")
+					.setPlaceholder("Mermaid-exports")
 					.setValue(this.plugin.settings.exportFolder)
 					.onChange(async (value) => {
 						const folder = normalizePath(value.trim() || "mermaid-exports");
@@ -145,9 +145,9 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			.setDisabled(true);
 
 		new Setting(containerEl)
-			.setName("ELK layout engine")
+			.setName("Elk layout engine")
 			.setDesc(
-				"Enable the ELK layout engine for improved diagram layouts. " +
+				"Enable the Elk layout engine for improved diagram layouts. " +
 				"Use 'flowchart-elk' or add 'config: layout: elk' to your diagrams. " +
 				"Requires Mermaid v11+, reload after changing."
 			)

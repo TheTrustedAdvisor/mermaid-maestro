@@ -78,13 +78,13 @@ export async function registerElkLayout(plugin: Plugin): Promise<boolean> {
 	}
 
 	if (typeof m.registerLayoutLoaders !== "function") {
-		new Notice("ELK layout requires Mermaid v11+, your Obsidian version may be too old.");
+		new Notice("Elk layout requires Mermaid v11+, your Obsidian version may be too old.");
 		return false;
 	}
 
 	// ELK uses elkjs which requires Node.js — not available on mobile
 	if (Platform.isMobile) {
-		new Notice("ELK layout is not available on mobile.");
+		new Notice("Elk layout is not available on mobile.");
 		return false;
 	}
 
