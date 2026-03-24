@@ -167,8 +167,8 @@ export function cloneSvgWithStyles(svg: SVGSVGElement): SVGSVGElement {
 	}
 
 	for (let i = 0; i < count; i++) {
-		const origEl = origElements[i] as Element;
-		const cloneEl = cloneElements[i] as Element;
+		const origEl = origElements[i];
+		const cloneEl = cloneElements[i];
 		if (!origEl || !cloneEl) continue;
 
 		const computed = window.getComputedStyle(origEl);

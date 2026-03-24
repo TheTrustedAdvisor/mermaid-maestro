@@ -99,7 +99,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("PNG export scale")
-			.setDesc("Resolution multiplier for PNG export (2x recommended for Retina displays).")
+			.setDesc("Resolution multiplier for PNG export (2x recommended for high-DPI displays).")
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("1", "1x")
@@ -116,7 +116,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Export folder")
 			.setDesc(
-				"Folder inside the vault for 'Save as file' exports. " +
+				"Folder inside the vault for 'save as file' exports. " +
 				"Created automatically when first used."
 			)
 			.addText((text) =>
@@ -149,7 +149,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			.setDesc(
 				"Enable the ELK layout engine for improved diagram layouts. " +
 				"Use 'flowchart-elk' or add 'config: layout: elk' to your diagrams. " +
-				"Requires Mermaid v11+. Reload after changing."
+				"Requires Mermaid v11+, reload after changing."
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -164,7 +164,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			.setName("Max edges")
 			.setDesc(
 				"Maximum number of edges allowed in a diagram (default: 500). " +
-				"Increase for large architecture diagrams. Reload after changing."
+				"Increase for large architecture diagrams, reload after changing."
 			)
 			.addText((text) =>
 				text

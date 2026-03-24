@@ -121,7 +121,7 @@ function scanAndEnhance(plugin: MermaidMaestroPlugin): void {
 
 		// Helper: resolve current SVG lazily to avoid stale references
 		const getCurrentSvg = () =>
-			mermaidContainer.querySelector("svg") as SVGSVGElement | null;
+			mermaidContainer.querySelector<SVGSVGElement>("svg");
 
 		// Apply auto-fit
 		if (plugin.settings.autoFitEnabled) {
@@ -183,7 +183,7 @@ function setupDragExport(
 
 	// Helper: resolve current SVG lazily
 	const getCurrentSvg = () =>
-		container.querySelector("svg") as SVGSVGElement | null;
+		container.querySelector<SVGSVGElement>("svg");
 
 	const preRenderPng = async () => {
 		if (renderInProgress || cachedPngDataUrl) return;

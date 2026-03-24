@@ -76,7 +76,7 @@ export class MermaidLightboxModal extends Modal {
 
 		// Usage hint (fades out after first interaction)
 		this.hintEl = contentEl.createDiv({ cls: "mermaid-oneinall-hint" });
-		this.hintEl.textContent = "Scroll to zoom \u00b7 Drag to pan \u00b7 Double-click to fit \u00b7 R to reset";
+		this.hintEl.textContent = "Scroll to zoom \u00b7 drag to pan \u00b7 double-click to fit \u00b7 R to reset";
 
 		// Register event listeners
 		this.registerMouseEvents();

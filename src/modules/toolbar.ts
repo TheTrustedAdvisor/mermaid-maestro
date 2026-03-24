@@ -14,7 +14,7 @@ export function createToolbar(
 
 	// Lazy lookup avoids stale SVG references after Mermaid re-renders
 	const getCurrentSvg = () =>
-		mermaidContainer.querySelector("svg") as SVGSVGElement | null;
+		mermaidContainer.querySelector<SVGSVGElement>("svg");
 
 	// Fullscreen / Lightbox
 	addToolbarButton(toolbar, "⛶", "Open in lightbox", () => {
