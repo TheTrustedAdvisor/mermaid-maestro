@@ -249,3 +249,18 @@
 .mermaid-oneinall-toolbar button:hover {
 	background: var(--background-modifier-hover);
 }
+
+/* Fix #14: Make toolbar always visible on mobile (no hover) */
+.is-mobile .mermaid-oneinall-enhanced .mermaid-oneinall-toolbar {
+	opacity: 1;
+}
+
+/* ─── Theme Toggle (Lichtschalter) ─── */
+
+.mermaid-oneinall-light-bg {
+	background-color: #ffffff !important;
+}
+
+.mermaid-oneinall-dark-bg {
+	background-color: #1e1e1e !important;
+}

@@ -1,5 +1,5 @@
 import { App, Modal } from "obsidian";
-import { parseViewBox, setViewBox, type ViewBox } from "../utils/svg-utils";
+import { parseViewBox, setViewBox, sanitizeSvg, type ViewBox } from "../utils/svg-utils";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
@@ -47,11 +47,20 @@ export class MermaidLightboxModal extends Modal {
 
 	// Bound handlers for cleanup
 	private boundOnKeyDown: (e: KeyboardEvent) => void;
+	private boundMinimapMouseMove: (e: MouseEvent) => void;
+	private boundMinimapMouseUp: () => void;
 
 	constructor(app: App, svg: SVGSVGElement) {
 		super(app);
 		this.svg = svg;
 		this.boundOnKeyDown = this.onKeyDown.bind(this);
+		this.boundMinimapMouseMove = (e: MouseEvent) => {
+			if (!this.minimapDragging) return;
+			this.minimapJumpTo(e.clientX, e.clientY);
+		};
+		this.boundMinimapMouseUp = () => {
+			this.minimapDragging = false;
+		};
 	}
 
 	onOpen() {
@@ -125,10 +134,15 @@ export class MermaidLightboxModal extends Modal {
 		// Register event listeners
 		this.registerMouseEvents();
 		document.addEventListener("keydown", this.boundOnKeyDown);
+
+		// Disable nav buttons appropriately on initial open
+		this.updateNavButtons();
 	}
 
 	onClose() {
 		document.removeEventListener("keydown", this.boundOnKeyDown);
+		document.removeEventListener("mousemove", this.boundMinimapMouseMove);
+		document.removeEventListener("mouseup", this.boundMinimapMouseUp);
 		this.contentEl.empty();
 		this.displaySvg = null;
 		this.container = null;
@@ -160,8 +174,9 @@ export class MermaidLightboxModal extends Modal {
 		// Remove previous SVG
 		this.container.empty();
 
-		// Clone the SVG
+		// Clone the SVG and sanitize it
 		this.displaySvg = src.cloneNode(true) as SVGSVGElement;
+		sanitizeSvg(this.displaySvg);
 
 		// Read and store the original viewBox
 		this.originalViewBox = parseViewBox(this.displaySvg);
@@ -231,22 +246,17 @@ export class MermaidLightboxModal extends Modal {
 			this.minimapJumpTo(e.clientX, e.clientY);
 		});
 
-		document.addEventListener("mousemove", (e) => {
-			if (!this.minimapDragging) return;
-			this.minimapJumpTo(e.clientX, e.clientY);
-		});
-
-		document.addEventListener("mouseup", () => {
-			this.minimapDragging = false;
-		});
+		document.addEventListener("mousemove", this.boundMinimapMouseMove);
+		document.addEventListener("mouseup", this.boundMinimapMouseUp);
 	}
 
 	private refreshMinimapSvg(): void {
 		if (!this.minimapSvgContainer || !this.displaySvg) return;
 		this.minimapSvgContainer.empty();
 
-		// Place a lightweight clone (no event listeners needed)
+		// Place a lightweight clone (no event listeners needed), sanitized
 		const clone = this.displaySvg.cloneNode(true) as SVGSVGElement;
+		sanitizeSvg(clone);
 		if (this.originalViewBox) {
 			setViewBox(clone, this.originalViewBox);
 		}
@@ -409,6 +419,10 @@ export class MermaidLightboxModal extends Modal {
 				this.applyTransform();
 			} else if (e.touches.length === 2) {
 				const newDistance = this.getTouchDistance(e.touches);
+				if (lastTouchDistance === 0) {
+					lastTouchDistance = newDistance;
+					return;
+				}
 				const scale = newDistance / lastTouchDistance;
 
 				this.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * scale));

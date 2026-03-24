@@ -15,6 +15,7 @@ export function parseViewBox(svg: SVGSVGElement): ViewBox | null {
 
 	const parts = attr.trim().split(/[\s,]+/).map(Number);
 	if (parts.length !== 4 || parts.some(isNaN)) return null;
+	if (parts[2] <= 0 || parts[3] <= 0) return null;
 
 	return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
 }
@@ -43,11 +44,43 @@ export function getSvgDimensions(svg: SVGSVGElement): { width: number; height: n
 }
 
 /**
+ * Strip dangerous elements and event-handler attributes from an SVG node.
+ * Prevents XSS when cloning untrusted SVG content.
+ */
+export function sanitizeSvg(svg: SVGSVGElement): void {
+	const dangerousTags = ["script", "foreignObject"];
+	for (const tag of dangerousTags) {
+		const els = svg.querySelectorAll(tag);
+		for (let i = els.length - 1; i >= 0; i--) {
+			els[i].remove();
+		}
+	}
+
+	const eventAttrs = [
+		"onload", "onclick", "onerror", "onmouseover",
+		"onmouseout", "onfocus", "onblur",
+	];
+	const allEls = svg.querySelectorAll("*");
+	for (const el of Array.from(allEls)) {
+		for (const attr of eventAttrs) {
+			el.removeAttribute(attr);
+		}
+	}
+	// Also sanitize the root element itself
+	for (const attr of eventAttrs) {
+		svg.removeAttribute(attr);
+	}
+}
+
+/**
  * Clone an SVG element with all inline styles resolved.
  * This ensures the clone looks correct when detached from the DOM.
  */
 export function cloneSvgWithStyles(svg: SVGSVGElement): SVGSVGElement {
 	const clone = svg.cloneNode(true) as SVGSVGElement;
+
+	// Sanitize the clone to remove dangerous elements/attributes
+	sanitizeSvg(clone);
 
 	// Copy computed styles to inline styles for all elements
 	const origElements = svg.querySelectorAll("*");

@@ -22,14 +22,3 @@ export function applyAutoFit(svg: SVGSVGElement): void {
 	svg.style.height = "auto";
 	svg.style.maxWidth = "100%";
 }
-
-/**
- * Remove auto-fit from an SVG (restore original sizing).
- */
-export function removeAutoFit(svg: SVGSVGElement, originalWidth: string, originalHeight: string): void {
-	if (originalWidth) svg.setAttribute("width", originalWidth);
-	if (originalHeight) svg.setAttribute("height", originalHeight);
-	svg.style.width = "";
-	svg.style.height = "";
-	svg.style.maxWidth = "";
-}

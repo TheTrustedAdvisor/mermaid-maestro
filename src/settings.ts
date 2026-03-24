@@ -7,7 +7,6 @@ export interface MermaidOneInAllSettings {
 	contextMenuEnabled: boolean;
 	toolbarEnabled: boolean;
 	pngScale: number;
-	pngBackground: "transparent" | "white";
 }
 
 export const DEFAULT_SETTINGS: MermaidOneInAllSettings = {
@@ -16,7 +15,6 @@ export const DEFAULT_SETTINGS: MermaidOneInAllSettings = {
 	contextMenuEnabled: true,
 	toolbarEnabled: true,
 	pngScale: 2,
-	pngBackground: "transparent",
 };
 
 export class MermaidOneInAllSettingTab extends PluginSettingTab {
@@ -31,7 +29,7 @@ export class MermaidOneInAllSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Mermaid OneInAll Settings" });
+		containerEl.createEl("h2", { text: "Mermaid Maestro Settings" });
 
 		new Setting(containerEl)
 			.setName("Auto-Fit")
@@ -97,18 +95,5 @@ export class MermaidOneInAllSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
-			.setName("PNG Background")
-			.setDesc("Default background for PNG exports.")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("transparent", "Transparent")
-					.addOption("white", "White")
-					.setValue(this.plugin.settings.pngBackground)
-					.onChange(async (value) => {
-						this.plugin.settings.pngBackground = value as "transparent" | "white";
-						await this.plugin.saveSettings();
-					})
-			);
 	}
 }

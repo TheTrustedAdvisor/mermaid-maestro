@@ -30,6 +30,26 @@ export function createToolbar(
 		);
 	});
 
+	// Theme toggle (Lichtschalter)
+	addToolbarButton(toolbar, "\u{1F313}", "Toggle diagram background", () => {
+		const hasLight = mermaidContainer.classList.contains("mermaid-oneinall-light-bg");
+		const hasDark = mermaidContainer.classList.contains("mermaid-oneinall-dark-bg");
+
+		// Remove both classes first
+		mermaidContainer.classList.remove("mermaid-oneinall-light-bg", "mermaid-oneinall-dark-bg");
+
+		if (hasLight) {
+			// Was light, switch to dark
+			mermaidContainer.classList.add("mermaid-oneinall-dark-bg");
+		} else if (hasDark) {
+			// Was dark, switch back to default (remove both)
+		} else {
+			// No override — detect current theme and apply opposite
+			const isDark = document.body.classList.contains("theme-dark");
+			mermaidContainer.classList.add(isDark ? "mermaid-oneinall-light-bg" : "mermaid-oneinall-dark-bg");
+		}
+	});
+
 	return toolbar;
 }
 

@@ -1,5 +1,6 @@
-import { Notice } from "obsidian";
+import { Notice, Platform } from "obsidian";
 import { cloneSvgWithStyles, serializeSvg, getSvgDimensions } from "../../utils/svg-utils";
+import { svgToBase64DataUrl } from "../../utils/clipboard-utils";
 
 /**
  * Export an SVG as PDF to the clipboard (macOS) or offer download as fallback.
@@ -14,15 +15,14 @@ export async function exportPdf(svg: SVGSVGElement, scale: number): Promise<void
 		const dims = getSvgDimensions(svg);
 		const svgString = serializeSvg(clone);
 
-		// Render SVG to canvas
-		const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-		const url = URL.createObjectURL(svgBlob);
+		// Use base64 data URL to avoid canvas tainting issues
+		const dataUrl = svgToBase64DataUrl(svgString);
 
 		const img = new Image();
 		await new Promise<void>((resolve, reject) => {
 			img.onload = () => resolve();
 			img.onerror = () => reject(new Error("Failed to load SVG for PDF export"));
-			img.src = url;
+			img.src = dataUrl;
 		});
 
 		const canvasWidth = img.naturalWidth * scale;
@@ -40,7 +40,6 @@ export async function exportPdf(svg: SVGSVGElement, scale: number): Promise<void
 		ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 		ctx.scale(scale, scale);
 		ctx.drawImage(img, 0, 0);
-		URL.revokeObjectURL(url);
 
 		// Convert canvas to PNG data URL for jsPDF
 		const imgData = canvas.toDataURL("image/png", 1.0);
@@ -67,7 +66,7 @@ export async function exportPdf(svg: SVGSVGElement, scale: number): Promise<void
 			new Notice("PDF saved as file (clipboard not supported on this platform).");
 		}
 	} catch (err) {
-		console.error("Mermaid OneInAll: PDF export failed", err);
+		console.error("Mermaid Maestro: PDF export failed", err);
 		new Notice(`PDF export failed: ${err instanceof Error ? err.message : "Unknown error"}`);
 	}
 }
@@ -87,16 +86,18 @@ async function tryClipboardPdf(blob: Blob): Promise<boolean> {
 		// Clipboard API doesn't support PDF on this platform
 	}
 
-	try {
-		// Try Electron's clipboard as fallback
-		const electron = require("electron");
-		if (electron?.clipboard) {
-			const buffer = Buffer.from(await blob.arrayBuffer());
-			electron.clipboard.writeBuffer("com.adobe.pdf", buffer);
-			return true;
+	if (Platform.isDesktop) {
+		try {
+			// Try Electron's clipboard as fallback
+			const electron = require("electron");
+			if (electron?.clipboard) {
+				const buffer = Buffer.from(await blob.arrayBuffer());
+				electron.clipboard.writeBuffer("com.adobe.pdf", buffer);
+				return true;
+			}
+		} catch {
+			// Not in Electron or clipboard write failed
 		}
-	} catch {
-		// Not in Electron or clipboard write failed
 	}
 
 	return false;

@@ -1,11 +1,11 @@
-import { Menu, Notice, Plugin } from "obsidian";
+import { Menu, Notice, Platform, Plugin } from "obsidian";
 import {
 	DEFAULT_SETTINGS,
 	MermaidOneInAllSettingTab,
 	type MermaidOneInAllSettings,
 } from "./settings";
 import { initMermaidObserver } from "./post-processor";
-import { cloneSvgWithStyles, serializeSvg } from "./utils/svg-utils";
+import { cloneSvgWithStyles, serializeSvg, parseViewBox } from "./utils/svg-utils";
 import { copyPngToClipboard, copyTextToClipboard, svgToBase64DataUrl } from "./utils/clipboard-utils";
 import { MermaidLightboxModal } from "./modules/lightbox";
 import { exportPdf } from "./modules/export/pdf-export";
@@ -99,10 +99,14 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			const scale = this.settings.pngScale;
 
 			// Read the original viewBox — Mermaid sets this to cover the full diagram
-			const vbAttr = svg.getAttribute("viewBox");
-			const vbParts = vbAttr ? vbAttr.trim().split(/[\s,]+/).map(Number) : null;
-			const vbW = vbParts && vbParts.length === 4 ? vbParts[2] : svg.getBBox().width;
-			const vbH = vbParts && vbParts.length === 4 ? vbParts[3] : svg.getBBox().height;
+			const vb = parseViewBox(svg);
+			const vbW = vb ? vb.width : svg.getBBox().width;
+			const vbH = vb ? vb.height : svg.getBBox().height;
+
+			if (vbW <= 0 || vbH <= 0) {
+				new Notice("Cannot export: diagram has zero dimensions.");
+				return;
+			}
 
 			const clone = cloneSvgWithStyles(svg);
 
@@ -141,14 +145,16 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			// Use Electron native clipboard via canvas data URL — most reliable
 			// path for large images on desktop (avoids Blob/Buffer truncation)
 			let clipboardOk = false;
-			try {
-				const electron = require("electron");
-				const pngDataUrl = canvas.toDataURL("image/png");
-				const nativeImg = electron.nativeImage.createFromDataURL(pngDataUrl);
-				electron.clipboard.writeImage(nativeImg);
-				clipboardOk = true;
-			} catch {
-				// Not in Electron — fall through to web API
+			if (Platform.isDesktop) {
+				try {
+					const electron = require("electron");
+					const pngDataUrl = canvas.toDataURL("image/png");
+					const nativeImg = electron.nativeImage.createFromDataURL(pngDataUrl);
+					electron.clipboard.writeImage(nativeImg);
+					clipboardOk = true;
+				} catch {
+					// Not in Electron — fall through to web API
+				}
 			}
 
 			if (!clipboardOk) {
@@ -173,10 +179,14 @@ export default class MermaidOneInAllPlugin extends Plugin {
 	 */
 	private async exportSvg(svg: SVGSVGElement): Promise<void> {
 		try {
-			const vbAttr = svg.getAttribute("viewBox");
-			const vbParts = vbAttr ? vbAttr.trim().split(/[\s,]+/).map(Number) : null;
-			const vbW = vbParts && vbParts.length === 4 ? vbParts[2] : svg.getBBox().width;
-			const vbH = vbParts && vbParts.length === 4 ? vbParts[3] : svg.getBBox().height;
+			const vb = parseViewBox(svg);
+			const vbW = vb ? vb.width : svg.getBBox().width;
+			const vbH = vb ? vb.height : svg.getBBox().height;
+
+			if (vbW <= 0 || vbH <= 0) {
+				new Notice("Cannot export: diagram has zero dimensions.");
+				return;
+			}
 
 			const clone = cloneSvgWithStyles(svg);
 			clone.removeAttribute("style");
@@ -186,7 +196,7 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			await copyTextToClipboard(svgString);
 			new Notice("SVG copied to clipboard!");
 		} catch (err) {
-			console.error("Mermaid OneInAll: SVG export failed", err);
+			console.error("Mermaid Maestro: SVG export failed", err);
 			new Notice(`SVG export failed: ${err instanceof Error ? err.message : "Unknown error"}`);
 		}
 	}
@@ -209,7 +219,7 @@ export default class MermaidOneInAllPlugin extends Plugin {
 			await copyTextToClipboard(source);
 			new Notice("Mermaid source copied to clipboard!");
 		} catch (err) {
-			console.error("Mermaid OneInAll: Source export failed", err);
+			console.error("Mermaid Maestro: Source export failed", err);
 			new Notice(`Source export failed: ${err instanceof Error ? err.message : "Unknown error"}`);
 		}
 	}

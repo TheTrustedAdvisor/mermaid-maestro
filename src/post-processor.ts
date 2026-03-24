@@ -1,7 +1,7 @@
 import type MermaidOneInAllPlugin from "./main";
 import { applyAutoFit } from "./modules/auto-fit";
 import { createToolbar } from "./modules/toolbar";
-import { cloneSvgWithStyles, serializeSvg, parseViewBox } from "./utils/svg-utils";
+import { cloneSvgWithStyles, serializeSvg, parseViewBox, sanitizeSvg } from "./utils/svg-utils";
 import { svgToBase64DataUrl } from "./utils/clipboard-utils";
 
 const ENHANCED_CLASS = "mermaid-oneinall-enhanced";
@@ -63,10 +63,17 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
 		// Skip disconnected nodes
 		if (!svg.isConnected) continue;
 
-		// Skip if already enhanced
+		// Skip if already enhanced — but re-enhance if the SVG inside changed
 		const mermaidContainer = svg.closest(".mermaid") as HTMLElement | null;
 		if (!mermaidContainer) continue;
-		if (mermaidContainer.classList.contains(ENHANCED_CLASS)) continue;
+		if (mermaidContainer.classList.contains(ENHANCED_CLASS)) {
+			// Check if the SVG is new (re-rendered by Obsidian)
+			if (!processedSvgs.has(svg)) {
+				mermaidContainer.classList.remove(ENHANCED_CLASS);
+			} else {
+				continue;
+			}
+		}
 
 		processedSvgs.add(svg);
 		mermaidContainer.classList.add(ENHANCED_CLASS);
@@ -103,73 +110,113 @@ function scanAndEnhance(plugin: MermaidOneInAllPlugin): void {
 
 		// Drag & drop export: make the container draggable so users can drag
 		// the diagram as a PNG into other applications.
-		setupDragExport(mermaidContainer, svg, plugin.settings.pngScale);
+		setupDragExport(mermaidContainer, svg, plugin);
 	}
 }
 
 /**
  * Make a Mermaid container draggable, exporting the SVG as PNG on drag start.
+ * Pre-renders the PNG on mouseenter so that the synchronous dragstart handler
+ * can set dataTransfer without awaiting async operations.
  */
 function setupDragExport(
 	container: HTMLElement,
 	svg: SVGSVGElement,
-	scale: number
+	plugin: MermaidOneInAllPlugin
 ): void {
 	container.setAttribute("draggable", "true");
 
-	container.addEventListener("dragstart", async (e: DragEvent) => {
+	let cachedPngDataUrl: string | null = null;
+	let cachedThumbCanvas: HTMLCanvasElement | null = null;
+	let cacheTimer: number | null = null;
+
+	const preRenderPng = () => {
+		// Debounce: avoid re-rendering on rapid mouse events
+		if (cacheTimer !== null) return;
+		if (cachedPngDataUrl) return;
+
+		cacheTimer = window.setTimeout(async () => {
+			cacheTimer = null;
+			try {
+				const scale = plugin.settings.pngScale;
+				const vb = parseViewBox(svg);
+				const vbW = vb ? vb.width : svg.getBBox().width;
+				const vbH = vb ? vb.height : svg.getBBox().height;
+
+				if (vbW <= 0 || vbH <= 0) return;
+
+				const clone = cloneSvgWithStyles(svg);
+				clone.removeAttribute("style");
+				clone.setAttribute("width", String(Math.ceil(vbW * scale)));
+				clone.setAttribute("height", String(Math.ceil(vbH * scale)));
+				clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+				const svgString = serializeSvg(clone);
+				const dataUrl = svgToBase64DataUrl(svgString);
+
+				const img = new Image();
+				await new Promise<void>((resolve, reject) => {
+					img.onload = () => resolve();
+					img.onerror = () => reject(new Error("Failed to load SVG as image"));
+					img.src = dataUrl;
+				});
+
+				const canvas = document.createElement("canvas");
+				canvas.width = img.naturalWidth;
+				canvas.height = img.naturalHeight;
+				const ctx = canvas.getContext("2d");
+				if (!ctx) return;
+				ctx.drawImage(img, 0, 0);
+
+				cachedPngDataUrl = canvas.toDataURL("image/png");
+
+				// Build thumbnail for drag image
+				const thumbCanvas = document.createElement("canvas");
+				const thumbScale = Math.min(1, 200 / Math.max(canvas.width, canvas.height));
+				thumbCanvas.width = Math.ceil(canvas.width * thumbScale);
+				thumbCanvas.height = Math.ceil(canvas.height * thumbScale);
+				const thumbCtx = thumbCanvas.getContext("2d");
+				if (thumbCtx) {
+					thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+				}
+				cachedThumbCanvas = thumbCanvas;
+			} catch (err) {
+				console.error("Mermaid Maestro: pre-render failed", err);
+			}
+		}, 100);
+	};
+
+	container.addEventListener("mouseenter", preRenderPng);
+
+	// Invalidate cache when SVG might change
+	container.addEventListener("mouseleave", () => {
+		cachedPngDataUrl = null;
+		cachedThumbCanvas = null;
+		if (cacheTimer !== null) {
+			window.clearTimeout(cacheTimer);
+			cacheTimer = null;
+		}
+	});
+
+	container.addEventListener("dragstart", (e: DragEvent) => {
 		if (!e.dataTransfer) return;
 
-		try {
-			// Determine output dimensions from viewBox
-			const vbAttr = svg.getAttribute("viewBox");
-			const vbParts = vbAttr ? vbAttr.trim().split(/[\s,]+/).map(Number) : null;
-			const vb = parseViewBox(svg);
-			const vbW = vb ? vb.width : (vbParts && vbParts.length === 4 ? vbParts[2] : svg.getBBox().width);
-			const vbH = vb ? vb.height : (vbParts && vbParts.length === 4 ? vbParts[3] : svg.getBBox().height);
-
-			const clone = cloneSvgWithStyles(svg);
-			clone.removeAttribute("style");
-			clone.setAttribute("width", String(Math.ceil(vbW * scale)));
-			clone.setAttribute("height", String(Math.ceil(vbH * scale)));
-			clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
-			const svgString = serializeSvg(clone);
-			const dataUrl = svgToBase64DataUrl(svgString);
-
-			// Render to canvas for PNG data
-			const img = new Image();
-			await new Promise<void>((resolve, reject) => {
-				img.onload = () => resolve();
-				img.onerror = () => reject(new Error("Failed to load SVG as image"));
-				img.src = dataUrl;
-			});
-
-			const canvas = document.createElement("canvas");
-			canvas.width = img.naturalWidth;
-			canvas.height = img.naturalHeight;
-			const ctx = canvas.getContext("2d");
-			if (!ctx) return;
-			ctx.drawImage(img, 0, 0);
-
-			// Set drag image (small visual thumbnail)
-			const thumbCanvas = document.createElement("canvas");
-			const thumbScale = Math.min(1, 200 / Math.max(canvas.width, canvas.height));
-			thumbCanvas.width = Math.ceil(canvas.width * thumbScale);
-			thumbCanvas.height = Math.ceil(canvas.height * thumbScale);
-			const thumbCtx = thumbCanvas.getContext("2d");
-			if (thumbCtx) {
-				thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-				e.dataTransfer.setDragImage(thumbCanvas, thumbCanvas.width / 2, thumbCanvas.height / 2);
-			}
-
-			// Provide the PNG as a data URL in the drag transfer
-			const pngDataUrl = canvas.toDataURL("image/png");
-			e.dataTransfer.setData("text/uri-list", pngDataUrl);
-			e.dataTransfer.setData("text/plain", pngDataUrl);
-			e.dataTransfer.effectAllowed = "copy";
-		} catch (err) {
-			console.error("Mermaid Maestro: drag export failed", err);
+		if (!cachedPngDataUrl) {
+			// Fallback: if pre-render hasn't finished, cancel the drag
+			e.preventDefault();
+			return;
 		}
+
+		if (cachedThumbCanvas) {
+			e.dataTransfer.setDragImage(
+				cachedThumbCanvas,
+				cachedThumbCanvas.width / 2,
+				cachedThumbCanvas.height / 2
+			);
+		}
+
+		e.dataTransfer.setData("text/uri-list", cachedPngDataUrl);
+		e.dataTransfer.setData("text/plain", cachedPngDataUrl);
+		e.dataTransfer.effectAllowed = "copy";
 	});
 }
