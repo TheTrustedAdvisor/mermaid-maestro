@@ -43,10 +43,10 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 
 		// ── Diagram Enhancement ──────────────────────────────────
 
-		containerEl.createEl("h2", { text: "Diagram Enhancement" });
+		new Setting(containerEl).setName("Diagram enhancement").setHeading();
 
 		new Setting(containerEl)
-			.setName("Auto-Fit")
+			.setName("Auto-fit")
 			.setDesc("Automatically scale diagrams to fit the container width.")
 			.addToggle((toggle) =>
 				toggle
@@ -70,7 +70,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Context Menu")
+			.setName("Context menu")
 			.setDesc("Right-click on a diagram to access export options.")
 			.addToggle((toggle) =>
 				toggle
@@ -82,7 +82,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Hover Toolbar")
+			.setName("Hover toolbar")
 			.setDesc("Show a small toolbar with quick actions when hovering over a diagram.")
 			.addToggle((toggle) =>
 				toggle
@@ -95,10 +95,10 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 
 		// ── Export ────────────────────────────────────────────────
 
-		containerEl.createEl("h2", { text: "Export" });
+		new Setting(containerEl).setName("Export").setHeading();
 
 		new Setting(containerEl)
-			.setName("PNG Export Scale")
+			.setName("PNG export scale")
 			.setDesc("Resolution multiplier for PNG export (2x recommended for Retina displays).")
 			.addDropdown((dropdown) =>
 				dropdown
@@ -114,7 +114,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Export Folder")
+			.setName("Export folder")
 			.setDesc(
 				"Folder inside the vault for 'Save as file' exports. " +
 				"Created automatically when first used."
@@ -136,16 +136,16 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 
 		// ── Mermaid Engine ───────────────────────────────────────
 
-		containerEl.createEl("h2", { text: "Mermaid Engine" });
+		new Setting(containerEl).setName("Mermaid engine").setHeading();
 
 		const version = detectMermaidVersion();
 		new Setting(containerEl)
-			.setName("Mermaid Version")
+			.setName("Mermaid version")
 			.setDesc(`Detected: ${version}`)
 			.setDisabled(true);
 
 		new Setting(containerEl)
-			.setName("ELK Layout Engine")
+			.setName("ELK layout engine")
 			.setDesc(
 				"Enable the ELK layout engine for improved diagram layouts. " +
 				"Use 'flowchart-elk' or add 'config: layout: elk' to your diagrams. " +
@@ -161,7 +161,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Max Edges")
+			.setName("Max edges")
 			.setDesc(
 				"Maximum number of edges allowed in a diagram (default: 500). " +
 				"Increase for large architecture diagrams. Reload after changing."
@@ -180,7 +180,7 @@ export class MermaidMaestroSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Default Theme")
+			.setName("Default theme")
 			.setDesc(
 				"Global Mermaid theme for all diagrams. " +
 				"Individual diagrams can override this with %%{init: {'theme': '...'}}%% directives. " +

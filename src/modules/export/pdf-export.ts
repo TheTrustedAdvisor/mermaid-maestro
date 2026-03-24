@@ -65,10 +65,11 @@ async function tryClipboardPdf(blob: Blob): Promise<boolean> {
 	if (Platform.isDesktop) {
 		try {
 			// Try Electron's clipboard as fallback
-			const electron = require("electron");
+			// @ts-expect-error Electron is provided by Obsidian at runtime
+			const electron = await import("electron");
 			if (electron?.clipboard) {
-				const buffer = Buffer.from(await blob.arrayBuffer());
-				electron.clipboard.writeBuffer("com.adobe.pdf", buffer);
+				const arrayBuf = await blob.arrayBuffer();
+				electron.clipboard.writeBuffer("com.adobe.pdf", Buffer.from(arrayBuf));
 				return true;
 			}
 		} catch {

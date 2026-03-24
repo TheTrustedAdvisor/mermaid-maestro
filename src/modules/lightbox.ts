@@ -171,7 +171,7 @@ export class MermaidLightboxModal extends Modal {
 		clone.setAttribute("width", "100%");
 		clone.setAttribute("height", "100%");
 		clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
-		clone.style.pointerEvents = "none";
+		clone.classList.add("mermaid-oneinall-no-pointer-events");
 		this.minimapSvgContainer.appendChild(clone);
 	}
 
@@ -204,10 +204,12 @@ export class MermaidLightboxModal extends Modal {
 		const clampedLeft = Math.max(0, Math.min(1 - widthFrac, leftFrac));
 		const clampedTop = Math.max(0, Math.min(1 - heightFrac, topFrac));
 
-		this.minimapViewport.style.left = `${clampedLeft * 100}%`;
-		this.minimapViewport.style.top = `${clampedTop * 100}%`;
-		this.minimapViewport.style.width = `${Math.min(1, widthFrac) * 100}%`;
-		this.minimapViewport.style.height = `${Math.min(1, heightFrac) * 100}%`;
+		this.minimapViewport.setCssProps({
+			"--viewport-left": `${clampedLeft * 100}%`,
+			"--viewport-top": `${clampedTop * 100}%`,
+			"--viewport-width": `${Math.min(1, widthFrac) * 100}%`,
+			"--viewport-height": `${Math.min(1, heightFrac) * 100}%`,
+		});
 	}
 
 	private minimapJumpTo(clientX: number, clientY: number): void {

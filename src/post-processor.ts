@@ -130,7 +130,7 @@ function scanAndEnhance(plugin: MermaidMaestroPlugin): void {
 
 		// Register click for lightbox
 		if (plugin.settings.lightboxEnabled) {
-			mermaidContainer.style.cursor = "pointer";
+			mermaidContainer.classList.add("mermaid-oneinall-clickable");
 			mermaidContainer.addEventListener("click", (e) => {
 				if (window.getSelection()?.toString()) return;
 				const s = getCurrentSvg();

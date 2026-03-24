@@ -96,22 +96,19 @@ export async function registerElkLayout(plugin: Plugin): Promise<boolean> {
 		const vaultBasePath = (plugin.app.vault.adapter as { basePath?: string }).basePath;
 		if (!vaultBasePath) throw new Error("Cannot determine vault base path");
 
-		// Construct and validate the ELK bundle path to prevent traversal
+		// Construct and validate the ELK bundle path to prevent traversal.
+		// We avoid Node's `path` module (not available on mobile) and instead
+		// check for directory-traversal sequences manually.
 		const expectedBase = `${vaultBasePath}/${pluginDir}`;
 		const elkPath = `${expectedBase}/elk-layout.js`;
 
-		// Defensive: ensure resolved path stays within the plugin directory.
-		// Node's require.resolve would canonicalize, but we manually check
-		// that the constructed path doesn't escape via ../ in pluginDir.
-		const normalizedElk = require("path").resolve(elkPath) as string;
-		const normalizedBase = require("path").resolve(expectedBase) as string;
-		if (!normalizedElk.startsWith(normalizedBase)) {
+		// Defensive: reject if pluginDir contains traversal sequences
+		if (pluginDir.includes("..") || pluginDir.startsWith("/")) {
 			throw new Error("ELK path escapes plugin directory — refusing to load");
 		}
 
-		// Synchronous require() — blocks briefly (~50ms) on first load.
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const elkModule = require(normalizedElk);
+		// Dynamic import — non-blocking, ESM-compatible
+		const elkModule = await import(elkPath);
 		const layouts = elkModule.default ?? elkModule;
 		const loaders = Array.isArray(layouts) ? layouts : [layouts];
 		m.registerLayoutLoaders(loaders);

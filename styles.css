@@ -39,13 +39,14 @@
 	position: relative;
 }
 
-/* Theme-aware lightbox backgrounds */
+/* Theme-aware lightbox backgrounds — use Obsidian's CSS variables
+   to match the current theme (works with custom themes too) */
 .mermaid-oneinall-lightbox-dark.modal {
-	background-color: rgba(0, 0, 0, 0.95);
+	background-color: var(--background-primary);
 }
 
 .mermaid-oneinall-lightbox-light.modal {
-	background-color: rgba(255, 255, 255, 0.97);
+	background-color: var(--background-primary);
 }
 
 .mermaid-oneinall-lightbox-container {
@@ -137,9 +138,13 @@
 	max-height: none !important;
 }
 
-/* Current viewport indicator rectangle */
+/* Current viewport indicator rectangle — positioned via CSS custom properties */
 .mermaid-oneinall-minimap-viewport {
 	position: absolute;
+	left: var(--viewport-left, 0%);
+	top: var(--viewport-top, 0%);
+	width: var(--viewport-width, 100%);
+	height: var(--viewport-height, 100%);
 	border: 2px solid var(--interactive-accent);
 	background: rgba(var(--interactive-accent-rgb, 99, 102, 241), 0.15);
 	box-sizing: border-box;
@@ -205,13 +210,48 @@
 }
 
 /* ─── Theme Toggle (Lichtschalter) ─── */
+/* Uses Obsidian CSS variables so it adapts to any theme, including custom ones.
+   .theme-light / .theme-dark on body provide the opposite theme's values
+   via Obsidian's built-in variable scoping. We force the opposite context. */
 
 .mermaid-oneinall-light-bg {
-	background-color: #ffffff !important;
+	background-color: var(--background-primary) !important;
+	/* Override to light-mode colors regardless of current theme */
+}
+
+.theme-dark .mermaid-oneinall-light-bg {
+	background-color: var(--color-base-00, #ffffff) !important;
 }
 
 .mermaid-oneinall-dark-bg {
-	background-color: #1e1e1e !important;
+	background-color: var(--background-primary) !important;
+}
+
+.theme-light .mermaid-oneinall-dark-bg {
+	background-color: var(--color-base-100, #1e1e1e) !important;
+}
+
+/* ─── Error State ─── */
+
+/* ─── Auto-fit ─── */
+
+.mermaid-oneinall-autofit {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-width: 100%;
+}
+
+/* ─── Clickable container ─── */
+
+.mermaid-oneinall-clickable {
+	cursor: pointer;
+}
+
+/* ─── Minimap SVG clone (no pointer events) ─── */
+
+.mermaid-oneinall-no-pointer-events {
+	pointer-events: none;
 }
 
 /* ─── Error State ─── */

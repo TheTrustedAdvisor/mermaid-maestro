@@ -17,8 +17,6 @@ export function applyAutoFit(svg: SVGSVGElement): void {
 	svg.removeAttribute("height");
 	svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-	// Use CSS to make SVG responsive within its container
-	svg.style.width = "100%";
-	svg.style.height = "auto";
-	svg.style.maxWidth = "100%";
+	// CSS class makes SVG responsive within its container
+	svg.classList.add("mermaid-oneinall-autofit");
 }

@@ -141,7 +141,8 @@ export default class MermaidMaestroPlugin extends Plugin {
 			let clipboardOk = false;
 			if (Platform.isDesktop) {
 				try {
-					const electron = require("electron");
+					// @ts-expect-error Electron is provided by Obsidian at runtime
+					const electron = await import("electron");
 					const pngDataUrl = canvas.toDataURL("image/png");
 					const nativeImg = electron.nativeImage.createFromDataURL(pngDataUrl);
 					electron.clipboard.writeImage(nativeImg);
