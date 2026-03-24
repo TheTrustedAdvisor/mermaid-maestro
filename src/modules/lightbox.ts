@@ -7,7 +7,8 @@ const ZOOM_STEP = 0.15;
 const PAN_STEP = 50;
 
 // Selector used to collect all Mermaid SVGs on the page for diagram navigation
-const MERMAID_SVG_SELECTOR = ".mermaid-oneinall-enhanced svg";
+// Direct child selector — avoids matching nested SVGs inside Mermaid diagrams
+const MERMAID_SVG_SELECTOR = ".mermaid-oneinall-enhanced > svg";
 
 export class MermaidLightboxModal extends Modal {
 	private svg: SVGSVGElement;
