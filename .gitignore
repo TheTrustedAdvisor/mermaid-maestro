@@ -16,3 +16,4 @@ Thumbs.db
 # OMC state
 .omc/
 .claude/
+build.sh
